@@ -1,16 +1,12 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { 
-  signInWithEmailAndPassword, 
-  signOut as firebaseSignOut,
-  onAuthStateChanged,
-  User
-} from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { User, Session } from "@supabase/supabase-js";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 type AuthContextType = {
   currentUser: User | null;
+  session: Session | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -29,34 +25,56 @@ export function useAuth() {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      setIsAdmin(!!user); // Any authenticated user is admin by default as requested
+    // Set up auth state listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, newSession) => {
+        setSession(newSession);
+        setCurrentUser(newSession?.user ?? null);
+        setIsAdmin(!!newSession?.user); // Any authenticated user is admin by default as requested
+      }
+    );
+
+    // THEN check for existing session
+    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+      setSession(currentSession);
+      setCurrentUser(currentSession?.user ?? null);
+      setIsAdmin(!!currentSession?.user);
       setLoading(false);
     });
 
-    return unsubscribe;
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
     try {
       setLoading(true);
-      await signInWithEmailAndPassword(auth, email, password);
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      if (error) {
+        throw error;
+      }
+      
       toast({
         title: "Login successful",
         description: "Welcome back, admin!",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login error:", error);
       toast({
         variant: "destructive",
         title: "Login failed",
-        description: "Invalid email or password",
+        description: error?.message || "Invalid email or password",
       });
       throw error;
     } finally {
@@ -66,12 +84,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
-      await firebaseSignOut(auth);
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        throw error;
+      }
+      
       toast({
         title: "Logged out",
         description: "You've been successfully logged out",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Logout error:", error);
       toast({
         variant: "destructive",
@@ -84,6 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = {
     currentUser,
+    session,
     loading,
     login,
     logout,

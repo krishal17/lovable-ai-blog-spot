@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -12,8 +12,15 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { login } = useAuth();
+  const { login, currentUser } = useAuth();
   const navigate = useNavigate();
+  
+  // Redirect if already logged in
+  useEffect(() => {
+    if (currentUser) {
+      navigate('/admin');
+    }
+  }, [currentUser, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,9 +35,8 @@ const Login: React.FC = () => {
       setLoading(true);
       await login(email, password);
       navigate('/admin');
-    } catch (err) {
-      setError('Failed to login. Please check your credentials.');
-      console.error(err);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to login. Please check your credentials.');
     } finally {
       setLoading(false);
     }
@@ -82,9 +88,12 @@ const Login: React.FC = () => {
               </Button>
             </form>
           </CardContent>
-          <CardFooter className="flex justify-center">
-            <p className="text-sm text-gray-500">
+          <CardFooter className="flex flex-col gap-2">
+            <p className="text-sm text-gray-500 text-center">
               This login is for admins only. Regular users can browse blogs without logging in.
+            </p>
+            <p className="text-xs text-gray-400 text-center">
+              Hint: Use krishalkarna@gmail.com with your password
             </p>
           </CardFooter>
         </Card>
