@@ -1,26 +1,30 @@
 
-export const uploadToCloudinary = async (file: File): Promise<string | null> => {
-  if (!file) return null;
-  
-  try {
-    const data = new FormData();
-    data.append("file", file);
-    data.append("upload_preset", "krishal");
-    data.append("cloud_name", "dgfuwtqbk");
+import { supabase } from '@/integrations/supabase/client';
 
-    const res = await fetch("https://api.cloudinary.com/v1_1/dgfuwtqbk/image/upload", {
-      method: "POST",
-      body: data
-    });
+export const uploadToCloudinary = async (file: File): Promise<string> => {
+  try {
+    // Generate a unique file name
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Date.now()}.${fileExt}`;
+    const filePath = `blog-images/${fileName}`;
     
-    if (!res.ok) {
-      throw new Error(`Upload failed with status: ${res.status}`);
-    }
+    // Upload file to Supabase Storage
+    const { error: uploadError } = await supabase
+      .storage
+      .from('blog_images')
+      .upload(filePath, file);
     
-    const result = await res.json();
-    return result.secure_url;
+    if (uploadError) throw uploadError;
+    
+    // Get public URL for the uploaded file
+    const { data } = supabase
+      .storage
+      .from('blog_images')
+      .getPublicUrl(filePath);
+    
+    return data.publicUrl;
   } catch (error) {
-    console.error("Cloudinary upload error:", error);
-    throw new Error("Failed to upload image. Please try again.");
+    console.error('Error uploading image:', error);
+    throw new Error('Failed to upload image');
   }
-};
+}

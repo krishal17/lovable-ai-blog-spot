@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { BLOG_CATEGORIES } from '@/lib/utils';
 import { ChevronLeft, Upload, Loader2 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface BlogFormData {
   title: string;
@@ -31,6 +32,7 @@ const BlogForm: React.FC = () => {
   const isEditMode = !!id;
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { currentUser } = useAuth();
   
   const [formData, setFormData] = useState<BlogFormData>({
     title: '',
@@ -101,7 +103,7 @@ const BlogForm: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  // Handle image upload to Cloudinary
+  // Handle image upload to Supabase Storage
   const handleImageUpload = async () => {
     if (!imageFile) return null;
     
@@ -163,6 +165,17 @@ const BlogForm: React.FC = () => {
         if (!finalImageUrl) return; // Stop if image upload failed
       }
       
+      // Check if user is authenticated
+      if (!currentUser) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "You must be logged in to create or edit blog posts."
+        });
+        navigate('/login');
+        return;
+      }
+
       // Prepare final data
       const finalData = {
         ...formData,
@@ -187,14 +200,14 @@ const BlogForm: React.FC = () => {
       // Navigate back to dashboard
       navigate('/admin');
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving blog:', error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: isEditMode 
+        description: error?.message || (isEditMode 
           ? "Failed to update blog post. Please try again." 
-          : "Failed to create blog post. Please try again."
+          : "Failed to create blog post. Please try again.")
       });
     } finally {
       setLoading(false);
