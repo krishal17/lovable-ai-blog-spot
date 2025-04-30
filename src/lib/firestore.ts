@@ -1,5 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
+import { Database } from "@/integrations/supabase/types";
 
 export interface BlogPost {
   id: string;
@@ -18,7 +19,10 @@ export const createBlogPost = async (blogData: Omit<BlogPost, 'id' | 'createdAt'
   const { data, error } = await supabase
     .from('blog_posts')
     .insert({
-      ...blogData,
+      title: blogData.title,
+      description: blogData.description,
+      image_url: blogData.imageUrl,
+      category: blogData.category,
       created_at: now,
       updated_at: now
     })
@@ -34,12 +38,18 @@ export const createBlogPost = async (blogData: Omit<BlogPost, 'id' | 'createdAt'
 export const updateBlogPost = async (id: string, blogData: Partial<Omit<BlogPost, 'id' | 'createdAt' | 'updatedAt'>>) => {
   const now = new Date().toISOString();
   
+  const updateData: any = {
+    updated_at: now
+  };
+  
+  if (blogData.title) updateData.title = blogData.title;
+  if (blogData.description) updateData.description = blogData.description;
+  if (blogData.imageUrl) updateData.image_url = blogData.imageUrl;
+  if (blogData.category) updateData.category = blogData.category;
+  
   const { data, error } = await supabase
     .from('blog_posts')
-    .update({
-      ...blogData,
-      updated_at: now
-    })
+    .update(updateData)
     .eq('id', id)
     .select()
     .single();

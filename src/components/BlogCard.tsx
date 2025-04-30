@@ -25,7 +25,7 @@ const BlogCard: React.FC<BlogCardProps> = ({ blog }) => {
         <div className="p-4 flex-grow flex flex-col">
           <h3 className="text-lg font-semibold mb-2 line-clamp-2">{blog.title}</h3>
           <p className="text-gray-600 text-sm mb-3 line-clamp-3">{blog.description}</p>
-          <p className="text-gray-500 text-xs mt-auto">{formatDate(blog.createdAt)}</p>
+          <p className="text-gray-500 text-xs mt-auto">{formatDate(new Date(blog.createdAt))}</p>
         </div>
       </div>
     </Link>

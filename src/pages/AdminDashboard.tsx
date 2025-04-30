@@ -105,7 +105,7 @@ const AdminDashboard: React.FC = () => {
                     <TableRow key={blog.id}>
                       <TableCell className="font-medium">{blog.title}</TableCell>
                       <TableCell>{blog.category}</TableCell>
-                      <TableCell>{formatDate(blog.createdAt)}</TableCell>
+                      <TableCell>{formatDate(new Date(blog.createdAt))}</TableCell>
                       <TableCell>
                         <div className="flex space-x-2">
                           <Link to={`/admin/edit/${blog.id}`}>

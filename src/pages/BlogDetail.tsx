@@ -90,7 +90,7 @@ const BlogDetail: React.FC = () => {
         <h1 className="text-3xl md:text-4xl font-bold mb-4">{blog.title}</h1>
         
         <div className="flex items-center space-x-4 mb-6">
-          <span className="text-gray-600 text-sm">{formatDate(blog.createdAt)}</span>
+          <span className="text-gray-600 text-sm">{formatDate(new Date(blog.createdAt))}</span>
           <span className="bg-blog-lavender text-blog-purple px-3 py-1 rounded-full text-xs">
             {blog.category}
           </span>
