@@ -1,1 +1,21 @@
+
 project_id = "ncwffeqtbmjfxgwmaqin"
+
+[api]
+enabled = true
+generate_types = true
+
+[db]
+shadow_database_schema = "shadow"
+
+[db.pooling]
+enabled = false
+
+[realtime]
+enabled = true
+
+[studio]
+port = 54321
+
+[functions.disable-user]
+verify_jwt = true

@@ -36,7 +36,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       (event, newSession) => {
         setSession(newSession);
         setCurrentUser(newSession?.user ?? null);
-        setIsAdmin(!!newSession?.user); // Any authenticated user is admin by default as requested
+        
+        // Check if user is admin
+        if (newSession?.user) {
+          const adminId = '95d1da8c-5e57-4886-8bdd-549e1fdf86c1';
+          setIsAdmin(newSession.user.id === adminId);
+        } else {
+          setIsAdmin(false);
+        }
       }
     );
 
@@ -44,7 +51,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
       setSession(currentSession);
       setCurrentUser(currentSession?.user ?? null);
-      setIsAdmin(!!currentSession?.user);
+      
+      // Check if user is admin
+      if (currentSession?.user) {
+        const adminId = '95d1da8c-5e57-4886-8bdd-549e1fdf86c1';
+        setIsAdmin(currentSession.user.id === adminId);
+      } else {
+        setIsAdmin(false);
+      }
+      
       setLoading(false);
     });
 
@@ -67,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       toast({
         title: "Login successful",
-        description: "Welcome back, admin!",
+        description: "Welcome back!",
       });
     } catch (error: any) {
       console.error("Login error:", error);

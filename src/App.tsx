@@ -17,8 +17,11 @@ import BlogDetail from "@/pages/BlogDetail";
 import Search from "@/pages/Search";
 import Categories from "@/pages/Categories";
 import Login from "@/pages/Login";
+import Register from "@/pages/Register";
+import Profile from "@/pages/Profile";
 import AdminDashboard from "@/pages/AdminDashboard";
 import BlogForm from "@/pages/BlogForm";
+import UserManagement from "@/pages/UserManagement";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -37,6 +40,17 @@ const App = () => (
                 <Route path="/search" element={<Search />} />
                 <Route path="/categories" element={<Categories />} />
                 <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                
+                {/* Protected User Routes */}
+                <Route
+                  path="/profile"
+                  element={
+                    <ProtectedRoute>
+                      <Profile />
+                    </ProtectedRoute>
+                  }
+                />
                 
                 {/* Protected Admin Routes */}
                 <Route 
@@ -60,6 +74,14 @@ const App = () => (
                   element={
                     <ProtectedRoute>
                       <BlogForm />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/admin/users" 
+                  element={
+                    <ProtectedRoute>
+                      <UserManagement />
                     </ProtectedRoute>
                   } 
                 />

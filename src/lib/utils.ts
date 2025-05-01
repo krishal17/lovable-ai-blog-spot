@@ -1,6 +1,7 @@
 
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { format, formatDistance } from "date-fns"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -8,11 +9,12 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatDate(date: Date | number): string {
   const dateObj = date instanceof Date ? date : new Date(date);
-  return new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  }).format(dateObj);
+  return format(dateObj, 'MMMM d, yyyy');
+}
+
+export function formatRelativeDate(date: Date | number): string {
+  const dateObj = date instanceof Date ? date : new Date(date);
+  return formatDistance(dateObj, new Date(), { addSuffix: true });
 }
 
 export function truncateText(text: string, maxLength: number): string {
@@ -27,5 +29,15 @@ export const BLOG_CATEGORIES = [
   "Machine Learning",
   "Data Science",
   "UI/UX",
+  "Books",
+  "Movies",
+  "Cooking",
+  "Poems",
+  "Travel",
+  "Fashion",
+  "Lifestyle",
+  "Health",
+  "Fitness",
+  "Personal",
   "General"
 ];

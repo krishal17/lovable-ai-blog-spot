@@ -3,10 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getBlogPostById, BlogPost } from '@/lib/firestore';
 import { formatDate } from '@/lib/utils';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import CommentSection from '@/components/CommentSection';
+import LikeButton from '@/components/LikeButton';
 
 const BlogDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -71,6 +73,21 @@ const BlogDetail: React.FC = () => {
     );
   }
 
+  // Determine which content style to apply based on blog's content_format
+  const getContentStyle = () => {
+    const format = blog.content_format || {};
+    const styles: React.CSSProperties = {
+      fontFamily: format.font === 'serif' ? 'Georgia, serif' : 
+                  format.font === 'mono' ? 'monospace' : 
+                  format.font === 'cursive' ? 'cursive' : 'inherit',
+      fontSize: format.size === 'large' ? '1.2rem' : 
+                format.size === 'small' ? '0.9rem' : '1rem',
+      fontStyle: format.style === 'italic' ? 'italic' : 'normal',
+      fontWeight: format.style === 'bold' ? 'bold' : 'normal'
+    };
+    return styles;
+  };
+
   return (
     <div className="blog-container pt-8">
       <div className="max-w-3xl mx-auto">
@@ -79,22 +96,32 @@ const BlogDetail: React.FC = () => {
           Back to all posts
         </Link>
         
-        {isAdmin && (
-          <div className="mb-6">
-            <Link to={`/admin/edit/${blog.id}`}>
-              <Button variant="outline" className="mr-2">Edit Post</Button>
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center space-x-4">
+            <Link to={`/categories?category=${encodeURIComponent(blog.category)}`}>
+              <span className="bg-blog-lavender text-blog-purple px-3 py-1 rounded-full text-xs hover:bg-blog-purple hover:text-white transition-colors">
+                {blog.category}
+              </span>
             </Link>
+            <LikeButton blogId={blog.id} />
           </div>
-        )}
-        
-        <h1 className="text-3xl md:text-4xl font-bold mb-4">{blog.title}</h1>
-        
-        <div className="flex items-center space-x-4 mb-6">
-          <span className="text-gray-600 text-sm">{formatDate(new Date(blog.createdAt))}</span>
-          <span className="bg-blog-lavender text-blog-purple px-3 py-1 rounded-full text-xs">
-            {blog.category}
-          </span>
+          
+          {isAdmin && (
+            <Link to={`/admin/edit/${blog.id}`}>
+              <Button variant="outline" size="sm" className="flex items-center">
+                <Edit className="w-4 h-4 mr-1" /> Edit Post
+              </Button>
+            </Link>
+          )}
         </div>
+        
+        <h1 className="text-3xl md:text-5xl font-bold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-blog-purple to-blog-dark-purple">
+          {blog.title}
+        </h1>
+        
+        <p className="text-gray-600 text-sm mb-8">
+          Published {formatDate(new Date(blog.createdAt))}
+        </p>
         
         <div className="mb-8">
           <img
@@ -104,9 +131,22 @@ const BlogDetail: React.FC = () => {
           />
         </div>
         
-        <div className="prose max-w-none">
-          <p className="whitespace-pre-line">{blog.description}</p>
-        </div>
+        <article className="prose prose-lg max-w-none">
+          {blog.excerpt && (
+            <p className="text-lg font-semibold text-gray-700 mb-4 italic">
+              {blog.excerpt}
+            </p>
+          )}
+          
+          <div 
+            className="whitespace-pre-line"
+            style={getContentStyle()}
+          >
+            {blog.description}
+          </div>
+        </article>
+        
+        <CommentSection blogId={blog.id} />
       </div>
     </div>
   );
