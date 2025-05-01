@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 
@@ -36,7 +35,7 @@ export interface UserProfile {
 // Create a new blog post
 export const createBlogPost = async (blogData: Omit<BlogPost, 'id' | 'createdAt' | 'updatedAt'>) => {
   const now = new Date().toISOString();
-  
+
   const { data, error } = await supabase
     .from('blog_posts')
     .insert({
@@ -52,48 +51,65 @@ export const createBlogPost = async (blogData: Omit<BlogPost, 'id' | 'createdAt'
     })
     .select()
     .single();
-  
+
   if (error) throw error;
-  
+
   return transformBlogPost(data);
 };
 
 // Update an existing blog post
-export const updateBlogPost = async (id: string, blogData: Partial<Omit<BlogPost, 'id' | 'createdAt' | 'updatedAt'>>) => {
-  const now = new Date().toISOString();
-  
-  const updateData: any = {
-    updated_at: now
-  };
-  
-  if (blogData.title) updateData.title = blogData.title;
-  if (blogData.description) updateData.description = blogData.description;
-  if (blogData.imageUrl) updateData.image_url = blogData.imageUrl;
-  if (blogData.category) updateData.category = blogData.category;
-  if (blogData.content_format) updateData.content_format = blogData.content_format;
-  if (blogData.excerpt) updateData.excerpt = blogData.excerpt;
-  if (blogData.is_featured !== undefined) updateData.is_featured = blogData.is_featured;
-  
-  const { data, error } = await supabase
-    .from('blog_posts')
-    .update(updateData)
-    .eq('id', id)
-    .select()
-    .single();
-  
-  if (error) throw error;
-  
-  return transformBlogPost(data);
+export const updateBlogPost = async (id: string, data: Partial<BlogPost>): Promise<BlogPost> => {
+  try {
+    // Prepare update data
+    const updateData: any = {
+      ...data,
+      updated_at: new Date().toISOString()
+    };
+
+    // If imageUrl is provided, update it
+    if (data.imageUrl) {
+      updateData.image_url = data.imageUrl;
+    }
+
+    const { data: updatedData, error: updateError } = await supabase
+      .from('blog_posts')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (updateError) {
+      console.error('Error updating blog post:', updateError);
+      throw new Error(updateError.message || 'Failed to update blog post');
+    }
+
+    if (!updatedData) {
+      throw new Error('No blog post found with the given ID');
+    }
+
+    return transformBlogPost(updatedData);
+  } catch (error: any) {
+    console.error('Error in updateBlogPost:', error);
+    throw new Error(error.message || 'Failed to update blog post');
+  }
 };
 
 // Delete a blog post
-export const deleteBlogPost = async (id: string) => {
-  const { error } = await supabase
-    .from('blog_posts')
-    .delete()
-    .eq('id', id);
-  
-  if (error) throw error;
+export const deleteBlogPost = async (id: string): Promise<void> => {
+  try {
+    const { error: deleteError } = await supabase
+      .from('blog_posts')
+      .delete()
+      .eq('id', id);
+
+    if (deleteError) {
+      console.error('Error deleting blog post:', deleteError);
+      throw new Error(deleteError.message || 'Failed to delete blog post');
+    }
+  } catch (error: any) {
+    console.error('Error in deleteBlogPost:', error);
+    throw new Error(error.message || 'Failed to delete blog post');
+  }
 };
 
 // Get a single blog post by ID
@@ -103,9 +119,9 @@ export const getBlogPostById = async (id: string): Promise<BlogPost> => {
     .select('*')
     .eq('id', id)
     .single();
-  
+
   if (error) throw error;
-  
+
   return transformBlogPost(data);
 };
 
@@ -115,9 +131,9 @@ export const getAllBlogPosts = async (): Promise<BlogPost[]> => {
     .from('blog_posts')
     .select('*')
     .order('created_at', { ascending: false });
-  
+
   if (error) throw error;
-  
+
   return data.map(transformBlogPost);
 };
 
@@ -127,9 +143,9 @@ export const getAllCategories = async (): Promise<string[]> => {
     .from('blog_posts')
     .select('category')
     .order('category');
-  
+
   if (error) throw error;
-  
+
   // Extract unique categories
   const uniqueCategories = [...new Set(data.map(item => item.category))];
   return uniqueCategories;
@@ -139,7 +155,7 @@ export const getAllCategories = async (): Promise<string[]> => {
 export const addComment = async (blogId: string, content: string): Promise<Comment> => {
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) throw new Error("User must be logged in to comment");
-  
+
   const { data, error } = await supabase
     .from('comments')
     .insert({
@@ -150,9 +166,9 @@ export const addComment = async (blogId: string, content: string): Promise<Comme
     })
     .select()
     .single();
-    
+
   if (error) throw error;
-  
+
   return transformComment(data);
 };
 
@@ -165,9 +181,9 @@ export const getCommentsByBlogId = async (blogId: string): Promise<Comment[]> =>
     `)
     .eq('blog_id', blogId)
     .order('created_at', { ascending: false });
-    
+
   if (error) throw error;
-  
+
   return data.map(transformComment);
 };
 
@@ -176,7 +192,7 @@ export const deleteComment = async (commentId: string) => {
     .from('comments')
     .delete()
     .eq('id', commentId);
-  
+
   if (error) throw error;
 };
 
@@ -184,7 +200,7 @@ export const deleteComment = async (commentId: string) => {
 export const toggleLike = async (blogId: string): Promise<boolean> => {
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) throw new Error("User must be logged in to like posts");
-  
+
   // Check if already liked
   const { data: existingLike } = await supabase
     .from('likes')
@@ -192,14 +208,14 @@ export const toggleLike = async (blogId: string): Promise<boolean> => {
     .eq('blog_id', blogId)
     .eq('user_id', userData.user.id)
     .single();
-    
+
   if (existingLike) {
     // Unlike
     const { error } = await supabase
       .from('likes')
       .delete()
       .eq('id', existingLike.id);
-    
+
     if (error) throw error;
     return false; // Now unliked
   } else {
@@ -210,7 +226,7 @@ export const toggleLike = async (blogId: string): Promise<boolean> => {
         blog_id: blogId,
         user_id: userData.user.id
       });
-    
+
     if (error) throw error;
     return true; // Now liked
   }
@@ -219,14 +235,14 @@ export const toggleLike = async (blogId: string): Promise<boolean> => {
 export const isPostLiked = async (blogId: string): Promise<boolean> => {
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) return false;
-  
+
   const { data } = await supabase
     .from('likes')
     .select('id')
     .eq('blog_id', blogId)
     .eq('user_id', userData.user.id)
     .single();
-    
+
   return !!data;
 };
 
@@ -235,7 +251,7 @@ export const getLikesCount = async (blogId: string): Promise<number> => {
     .from('likes')
     .select('id', { count: 'exact', head: true })
     .eq('blog_id', blogId);
-    
+
   if (error) throw error;
   return count || 0;
 };
@@ -247,9 +263,9 @@ export const getUserProfile = async (userId: string): Promise<UserProfile> => {
     .select('*')
     .eq('id', userId)
     .single();
-    
+
   if (error) throw error;
-  
+
   return {
     id: data.id,
     username: data.username,
@@ -261,19 +277,19 @@ export const getUserProfile = async (userId: string): Promise<UserProfile> => {
 
 export const updateUserProfile = async (userId: string, profile: Partial<UserProfile>): Promise<UserProfile> => {
   const updateData: any = {};
-  
+
   if (profile.username) updateData.username = profile.username;
   if (profile.avatarUrl) updateData.avatar_url = profile.avatarUrl;
-  
+
   const { data, error } = await supabase
     .from('user_profiles')
     .update(updateData)
     .eq('id', userId)
     .select()
     .single();
-    
+
   if (error) throw error;
-  
+
   return {
     id: data.id,
     username: data.username,
@@ -289,9 +305,9 @@ export const getAllUsers = async (): Promise<UserProfile[]> => {
     .from('user_profiles')
     .select('*')
     .order('created_at', { ascending: false });
-    
+
   if (error) throw error;
-  
+
   return data.map(user => ({
     id: user.id,
     username: user.username,

@@ -1,10 +1,12 @@
-
+import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { motion } from "framer-motion";
+import { ThemeProvider } from "@/components/theme-provider";
 
 // Components
 import NavBar from "@/components/NavBar";
@@ -26,77 +28,85 @@ import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <AuthProvider>
-        <BrowserRouter>
-          <div className="flex flex-col min-h-screen">
-            <NavBar />
-            <main className="flex-grow">
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/blog/:id" element={<BlogDetail />} />
-                <Route path="/search" element={<Search />} />
-                <Route path="/categories" element={<Categories />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
-                
-                {/* Protected User Routes */}
-                <Route
-                  path="/profile"
-                  element={
-                    <ProtectedRoute>
-                      <Profile />
-                    </ProtectedRoute>
-                  }
-                />
-                
-                {/* Protected Admin Routes */}
-                <Route 
-                  path="/admin" 
-                  element={
-                    <ProtectedRoute>
-                      <AdminDashboard />
-                    </ProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/admin/create" 
-                  element={
-                    <ProtectedRoute>
-                      <BlogForm />
-                    </ProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/admin/edit/:id" 
-                  element={
-                    <ProtectedRoute>
-                      <BlogForm />
-                    </ProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/admin/users" 
-                  element={
-                    <ProtectedRoute>
-                      <UserManagement />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </main>
-            <Footer />
+const App = () => {
+  return (
+    <BrowserRouter>
+      <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+        <AuthProvider>
+          <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900 dark:to-pink-900">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <NavBar />
+              <main className="container mx-auto px-4 py-8 max-w-7xl">
+                <Routes>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/blog/:id" element={<BlogDetail />} />
+                  <Route path="/search" element={<Search />} />
+                  <Route path="/categories" element={<Categories />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/auth/callback" element={<Login />} />
+                  <Route path="/register" element={<Register />} />
+
+                  {/* Protected User Routes */}
+                  <Route
+                    path="/profile"
+                    element={
+                      <ProtectedRoute>
+                        <Profile />
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  {/* Protected Admin Routes */}
+                  <Route
+                    path="/admin"
+                    element={
+                      <ProtectedRoute adminOnly>
+                        <AdminDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/create"
+                    element={
+                      <ProtectedRoute adminOnly>
+                        <BlogForm />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/edit/:id"
+                    element={
+                      <ProtectedRoute adminOnly>
+                        <BlogForm />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/users"
+                    element={
+                      <ProtectedRoute adminOnly>
+                        <UserManagement />
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </main>
+              <Footer />
+            </motion.div>
+            <Toaster />
+            <Sonner />
           </div>
-        </BrowserRouter>
-        <Toaster />
-        <Sonner />
-      </AuthProvider>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+        </AuthProvider>
+      </ThemeProvider>
+    </BrowserRouter>
+  );
+};
 
 export default App;

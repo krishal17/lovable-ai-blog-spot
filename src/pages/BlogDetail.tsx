@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getBlogPostById, BlogPost } from '@/lib/firestore';
@@ -20,7 +19,7 @@ const BlogDetail: React.FC = () => {
   useEffect(() => {
     const fetchBlog = async () => {
       if (!id) return;
-      
+
       try {
         setLoading(true);
         const blogData = await getBlogPostById(id);
@@ -77,11 +76,11 @@ const BlogDetail: React.FC = () => {
   const getContentStyle = () => {
     const format = blog.content_format || {};
     const styles: React.CSSProperties = {
-      fontFamily: format.font === 'serif' ? 'Georgia, serif' : 
-                  format.font === 'mono' ? 'monospace' : 
-                  format.font === 'cursive' ? 'cursive' : 'inherit',
-      fontSize: format.size === 'large' ? '1.2rem' : 
-                format.size === 'small' ? '0.9rem' : '1rem',
+      fontFamily: format.font === 'serif' ? 'Georgia, serif' :
+        format.font === 'mono' ? 'monospace' :
+          format.font === 'cursive' ? 'cursive' : 'inherit',
+      fontSize: format.size === 'large' ? '1.2rem' :
+        format.size === 'small' ? '0.9rem' : '1rem',
       fontStyle: format.style === 'italic' ? 'italic' : 'normal',
       fontWeight: format.style === 'bold' ? 'bold' : 'normal'
     };
@@ -95,7 +94,7 @@ const BlogDetail: React.FC = () => {
           <ChevronLeft className="w-4 h-4 mr-1" />
           Back to all posts
         </Link>
-        
+
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center space-x-4">
             <Link to={`/categories?category=${encodeURIComponent(blog.category)}`}>
@@ -103,9 +102,14 @@ const BlogDetail: React.FC = () => {
                 {blog.category}
               </span>
             </Link>
-            <LikeButton blogId={blog.id} />
+            <div className="flex items-center space-x-4">
+              <LikeButton postId={blog.id} />
+              <span className="text-sm text-gray-500">
+                {blog.comments?.length || 0} Comments
+              </span>
+            </div>
           </div>
-          
+
           {isAdmin && (
             <Link to={`/admin/edit/${blog.id}`}>
               <Button variant="outline" size="sm" className="flex items-center">
@@ -114,15 +118,15 @@ const BlogDetail: React.FC = () => {
             </Link>
           )}
         </div>
-        
+
         <h1 className="text-3xl md:text-5xl font-bold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-blog-purple to-blog-dark-purple">
           {blog.title}
         </h1>
-        
+
         <p className="text-gray-600 text-sm mb-8">
           Published {formatDate(new Date(blog.createdAt))}
         </p>
-        
+
         <div className="mb-8">
           <img
             src={blog.imageUrl || "/placeholder.svg"}
@@ -130,23 +134,25 @@ const BlogDetail: React.FC = () => {
             className="w-full h-auto rounded-xl object-cover max-h-96"
           />
         </div>
-        
+
         <article className="prose prose-lg max-w-none">
           {blog.excerpt && (
             <p className="text-lg font-semibold text-gray-700 mb-4 italic">
               {blog.excerpt}
             </p>
           )}
-          
-          <div 
+
+          <div
             className="whitespace-pre-line"
             style={getContentStyle()}
           >
             {blog.description}
           </div>
         </article>
-        
-        <CommentSection blogId={blog.id} />
+
+        <div className="mt-12">
+          <CommentSection postId={blog.id} />
+        </div>
       </div>
     </div>
   );

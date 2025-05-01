@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { useToast } from "@/hooks/use-toast";
@@ -9,6 +8,8 @@ type AuthContextType = {
   session: Session | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
+  loginWithGithub: () => Promise<void>;
   logout: () => Promise<void>;
   isAdmin: boolean;
 };
@@ -31,42 +32,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, newSession) => {
-        console.log("Auth state changed:", event, newSession?.user?.id);
-        
-        // Update session and user
-        setSession(newSession);
-        setCurrentUser(newSession?.user ?? null);
-        
-        // Check if user is admin
-        if (newSession?.user) {
-          const adminId = '95d1da8c-5e57-4886-8bdd-549e1fdf86c1';
-          const isUserAdmin = newSession.user.id === adminId;
-          setIsAdmin(isUserAdmin);
-          
-          if (event === 'SIGNED_IN') {
-            // Handle successful sign-in
-            setTimeout(() => {
-              toast({
-                title: "Logged in successfully",
-                description: `Welcome${isUserAdmin ? ' Admin' : ''}!`,
-              });
-            }, 0);
-          }
+      async (event, session) => {
+        setSession(session);
+        setCurrentUser(session?.user ?? null);
+
+        if (session?.user) {
+          const adminId = '32c9460c-ce5b-4143-b6e2-31edde1f0326';
+          setIsAdmin(session.user.id === adminId);
         } else {
           setIsAdmin(false);
-          
-          if (event === 'SIGNED_OUT') {
-            // Handle sign-out
-            setTimeout(() => {
-              toast({
-                title: "Logged out",
-                description: "You've been successfully logged out",
-              });
-            }, 0);
-          }
+        }
+
+        if (event === 'SIGNED_IN') {
+          toast({
+            title: "Welcome back! 👋",
+            description: `Logged in as ${session?.user?.user_metadata?.full_name || session?.user?.email}`,
+            className: "bg-gradient-to-r from-purple-500 to-pink-500 text-white",
+          });
+        } else if (event === 'SIGNED_OUT') {
+          toast({
+            title: "See you soon! 👋",
+            description: "You've been successfully logged out",
+            className: "bg-gradient-to-r from-blue-500 to-teal-500 text-white",
+          });
+        } else if (event === 'USER_UPDATED') {
+          toast({
+            title: "Profile updated! ✨",
+            description: "Your profile has been successfully updated",
+            className: "bg-gradient-to-r from-green-500 to-emerald-500 text-white",
+          });
         }
       }
     );
@@ -76,15 +71,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("Got existing session:", currentSession?.user?.id);
       setSession(currentSession);
       setCurrentUser(currentSession?.user ?? null);
-      
+
       // Check if user is admin
       if (currentSession?.user) {
-        const adminId = '95d1da8c-5e57-4886-8bdd-549e1fdf86c1';
+        const adminId = '32c9460c-ce5b-4143-b6e2-31edde1f0326';
         setIsAdmin(currentSession.user.id === adminId);
       } else {
         setIsAdmin(false);
       }
-      
+
       setLoading(false);
     });
 
@@ -100,18 +95,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email,
         password,
       });
-      
-      if (error) {
-        throw error;
-      }
-      
-      // Toast is now handled in the auth state change listener
+
+      if (error) throw error;
     } catch (error: any) {
       console.error("Login error:", error);
       toast({
         variant: "destructive",
-        title: "Login failed",
+        title: "Oops! Login failed 😔",
         description: error?.message || "Invalid email or password",
+        className: "bg-gradient-to-r from-red-500 to-rose-500 text-white",
       });
       throw error;
     } finally {
@@ -119,14 +111,93 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const register = async (email: string, password: string) => {
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Almost there! ✨",
+        description: "Please check your email to verify your account",
+        className: "bg-gradient-to-r from-purple-500 to-indigo-500 text-white",
+      });
+    } catch (error: any) {
+      console.error("Registration error:", error);
+      toast({
+        variant: "destructive",
+        title: "Registration failed 😔",
+        description: error?.message || "Failed to create account",
+        className: "bg-gradient-to-r from-red-500 to-rose-500 text-white",
+      });
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loginWithGoogle = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
+      });
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error signing in with Google:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to sign in with Google. Please try again.",
+        className: "bg-gradient-to-r from-red-500 to-rose-500 text-white",
+      });
+    }
+  };
+
+  const loginWithGithub = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'github',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          scopes: 'read:user user:email',
+        },
+      });
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error signing in with GitHub:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to sign in with GitHub. Please try again.",
+        className: "bg-gradient-to-r from-red-500 to-rose-500 text-white",
+      });
+    }
+  };
+
   const logout = async () => {
     try {
       const { error } = await supabase.auth.signOut();
-      
+
       if (error) {
         throw error;
       }
-      
+
       // Toast is now handled in the auth state change listener
     } catch (error: any) {
       console.error("Logout error:", error);
@@ -144,6 +215,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     loading,
     login,
+    register,
+    loginWithGoogle,
+    loginWithGithub,
     logout,
     isAdmin
   };

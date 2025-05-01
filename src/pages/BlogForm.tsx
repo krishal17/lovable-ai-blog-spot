@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { createBlogPost, updateBlogPost, getBlogPostById, BlogPost } from '@/lib/firestore';
@@ -35,7 +34,7 @@ const BlogForm: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { currentUser, isAdmin } = useAuth();
-  
+
   const [formData, setFormData] = useState<BlogFormData>({
     title: '',
     description: '',
@@ -43,7 +42,7 @@ const BlogForm: React.FC = () => {
     category: BLOG_CATEGORIES[0],
     excerpt: ''
   });
-  
+
   const [loading, setLoading] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>('');
@@ -65,18 +64,20 @@ const BlogForm: React.FC = () => {
   useEffect(() => {
     const fetchBlog = async () => {
       if (!isEditMode) return;
-      
+
       try {
         setLoading(true);
         const blogData = await getBlogPostById(id);
-        setFormData({
-          title: blogData.title,
-          description: blogData.description,
-          imageUrl: blogData.imageUrl,
-          category: blogData.category,
-          excerpt: blogData.excerpt || ''
-        });
-        setImagePreview(blogData.imageUrl);
+        if (blogData) {
+          setFormData({
+            title: blogData.title,
+            description: blogData.description,
+            imageUrl: blogData.imageUrl,
+            category: blogData.category,
+            excerpt: blogData.excerpt || ''
+          });
+          setImagePreview(blogData.imageUrl);
+        }
       } catch (error) {
         console.error('Error fetching blog:', error);
         toast({
@@ -109,8 +110,28 @@ const BlogForm: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Validate file type
+    if (!file.type.match(/image\/(jpeg|png|gif|webp)/)) {
+      toast({
+        variant: "destructive",
+        title: "Invalid file type",
+        description: "Please upload an image file (JPEG, PNG, GIF, or WebP)."
+      });
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        variant: "destructive",
+        title: "File too large",
+        description: "Please upload an image smaller than 5MB."
+      });
+      return;
+    }
+
     setImageFile(file);
-    
+
     // Create preview
     const reader = new FileReader();
     reader.onloadend = () => {
@@ -122,43 +143,68 @@ const BlogForm: React.FC = () => {
   // Upload image to Storage
   const handleImageUpload = async () => {
     if (!imageFile || !currentUser) return null;
-    
+
     try {
       setUploadingImage(true);
-      
-      // Try Cloudinary first if available
-      try {
-        const cloudinaryUrl = await uploadToCloudinary(imageFile);
-        if (cloudinaryUrl) {
-          return cloudinaryUrl;
-        }
-      } catch (cloudinaryError) {
-        console.log('Cloudinary upload failed, falling back to Supabase storage');
-      }
-      
-      // Fall back to Supabase Storage
+
+      // Upload to Supabase Storage
       const fileExt = imageFile.name.split('.').pop();
-      const fileName = `blog-images/${Date.now()}.${fileExt}`;
-      
+      const fileName = `${currentUser.uid}/${Date.now()}.${fileExt}`;
+
+      // First check if bucket exists
+      const { data: buckets, error: bucketError } = await supabase
+        .storage
+        .listBuckets();
+
+      if (bucketError) {
+        console.error('Error checking buckets:', bucketError);
+        throw bucketError;
+      }
+
+      // Create bucket if it doesn't exist
+      if (!buckets?.some(bucket => bucket.name === 'blog_images')) {
+        const { error: createError } = await supabase
+          .storage
+          .createBucket('blog_images', {
+            public: true,
+            fileSizeLimit: 5242880, // 5MB
+            allowedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+          });
+
+        if (createError) {
+          console.error('Error creating bucket:', createError);
+          throw createError;
+        }
+      }
+
+      // Upload the file
       const { data: uploadData, error: uploadError } = await supabase
         .storage
-        .from('profile_images')
-        .upload(fileName, imageFile);
-      
-      if (uploadError) throw uploadError;
-      
-      const { data } = supabase
+        .from('blog_images')
+        .upload(fileName, imageFile, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('Supabase upload error:', uploadError);
+        throw uploadError;
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase
         .storage
-        .from('profile_images')
+        .from('blog_images')
         .getPublicUrl(fileName);
-      
-      return data.publicUrl;
+
+      return publicUrl;
     } catch (error) {
       console.error('Error uploading image:', error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to upload image. Please try again."
+        description: "Failed to upload image. Please try again.",
+        className: "bg-gradient-to-r from-red-500 to-rose-500 text-white",
       });
       return null;
     } finally {
@@ -169,10 +215,10 @@ const BlogForm: React.FC = () => {
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
       setLoading(true);
-      
+
       // Validate form
       if (!formData.title.trim()) {
         toast({
@@ -182,7 +228,7 @@ const BlogForm: React.FC = () => {
         });
         return;
       }
-      
+
       if (!formData.description.trim()) {
         toast({
           variant: "destructive",
@@ -191,7 +237,7 @@ const BlogForm: React.FC = () => {
         });
         return;
       }
-      
+
       if (!formData.category) {
         toast({
           variant: "destructive",
@@ -200,233 +246,192 @@ const BlogForm: React.FC = () => {
         });
         return;
       }
-      
+
       // Upload image if a new one is selected
       let finalImageUrl = formData.imageUrl;
       if (imageFile) {
         finalImageUrl = await handleImageUpload() || '';
-        if (!finalImageUrl) return; // Stop if image upload failed
-      }
-      
-      // Check if user is authenticated
-      if (!currentUser) {
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "You must be logged in to create or edit blog posts."
-        });
-        navigate('/login');
-        return;
+        if (!finalImageUrl) {
+          toast({
+            variant: "destructive",
+            title: "Error",
+            description: "Failed to upload image. Please try again."
+          });
+          return;
+        }
       }
 
       // Prepare final data
       const blogData = {
-        ...formData,
+        title: formData.title,
+        description: formData.description,
         imageUrl: finalImageUrl,
-        // Generate an excerpt if not provided
-        excerpt: formData.excerpt || formData.description.substring(0, 150) + '...'
+        category: formData.category,
+        excerpt: formData.excerpt,
+        is_featured: false
       };
-      
-      console.log('Submitting blog data:', blogData);
-      
-      // Create or update blog post
+
+      let updatedPost;
       if (isEditMode && id) {
-        await updateBlogPost(id, blogData);
+        updatedPost = await updateBlogPost(id, blogData);
         toast({
-          title: "Success",
-          description: "Blog post updated successfully!"
+          title: "Success!",
+          description: "Blog post updated successfully.",
+          className: "bg-gradient-to-r from-green-500 to-emerald-500 text-white",
         });
       } else {
-        await createBlogPost(blogData);
+        updatedPost = await createBlogPost(blogData);
         toast({
-          title: "Success",
-          description: "New blog post created successfully!"
+          title: "Success!",
+          description: "Blog post created successfully.",
+          className: "bg-gradient-to-r from-green-500 to-emerald-500 text-white",
         });
       }
-      
-      // Navigate back to dashboard
-      navigate('/admin');
-      
+
+      // Navigate to the updated/created post
+      navigate(`/blog/${updatedPost.id}`);
     } catch (error: any) {
-      console.error('Error saving blog:', error);
+      console.error('Error submitting form:', error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: error?.message || (isEditMode 
-          ? "Failed to update blog post. Please try again." 
-          : "Failed to create blog post. Please try again.")
+        description: error.message || "Failed to save blog post. Please try again.",
+        className: "bg-gradient-to-r from-red-500 to-rose-500 text-white",
       });
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading && isEditMode) {
-    return (
-      <div className="blog-container">
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-blog-purple" />
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="blog-container">
-      <div className="max-w-3xl mx-auto">
-        <button 
+    <div className="max-w-4xl mx-auto">
+      <div className="flex items-center mb-6">
+        <Button
+          variant="ghost"
           onClick={() => navigate('/admin')}
-          className="inline-flex items-center text-blog-purple hover:underline mb-6"
+          className="mr-4"
         >
-          <ChevronLeft className="w-4 h-4 mr-1" />
-          Back to dashboard
-        </button>
-        
-        <h1 className="text-2xl font-bold mb-6">
+          <ChevronLeft className="h-4 w-4 mr-2" />
+          Back to Dashboard
+        </Button>
+        <h1 className="text-2xl font-bold">
           {isEditMode ? 'Edit Blog Post' : 'Create New Blog Post'}
         </h1>
-        
-        <Card className="shadow-lg border-none">
-          <CardContent className="pt-6">
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="title" className="block text-sm font-medium">
-                  Title <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="title"
-                  name="title"
-                  value={formData.title}
-                  onChange={handleChange}
-                  placeholder="Enter blog title"
-                  className="h-12"
-                  required
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="excerpt" className="block text-sm font-medium">
-                  Excerpt <span className="text-gray-400 text-xs">(optional)</span>
-                </Label>
-                <Input
-                  id="excerpt"
-                  name="excerpt"
-                  value={formData.excerpt || ''}
-                  onChange={handleChange}
-                  placeholder="A short summary of your blog post"
-                  className="h-12"
-                />
-                <p className="text-xs text-muted-foreground">
-                  If left empty, an excerpt will be generated from your content
-                </p>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="category" className="block text-sm font-medium">
-                  Category <span className="text-red-500">*</span>
-                </Label>
-                <Select 
-                  value={formData.category} 
-                  onValueChange={handleCategoryChange}
-                >
-                  <SelectTrigger className="h-12">
-                    <SelectValue placeholder="Select a category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {BLOG_CATEGORIES.map((category) => (
-                        <SelectItem key={category} value={category}>
-                          {category}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="description" className="block text-sm font-medium">
-                  Content <span className="text-red-500">*</span>
-                </Label>
-                <Textarea
-                  id="description"
-                  name="description"
-                  value={formData.description}
-                  onChange={handleChange}
-                  placeholder="Write your blog content here..."
-                  rows={10}
-                  className="resize-y"
-                  required
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="image" className="block text-sm font-medium">
-                  Featured Image
-                </Label>
-                <div className="mt-1 flex items-center">
-                  <Input
-                    id="image"
+      </div>
+
+      <Card className="p-6">
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Title</label>
+              <Input
+                name="title"
+                value={formData.title}
+                onChange={handleChange}
+                placeholder="Enter blog post title"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Category</label>
+              <Select
+                value={formData.category}
+                onValueChange={handleCategoryChange}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {BLOG_CATEGORIES.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Featured Image</label>
+              <div className="flex items-center space-x-4">
+                <div className="relative">
+                  <input
                     type="file"
                     accept="image/*"
                     onChange={handleImageChange}
                     className="hidden"
+                    id="image-upload"
                   />
                   <label
-                    htmlFor="image"
-                    className="cursor-pointer flex items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-4 w-full hover:border-blog-purple transition-colors"
+                    htmlFor="image-upload"
+                    className="cursor-pointer"
                   >
-                    <div className="space-y-1 text-center">
-                      <Upload className="mx-auto h-10 w-10 text-gray-400" />
-                      <div className="text-sm text-gray-600">
-                        <span className="font-medium text-blog-purple">
-                          Click to upload
-                        </span>{" "}
-                        or drag and drop
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        PNG, JPG, GIF up to 10MB
-                      </p>
-                    </div>
+                    <Button variant="outline" className="w-full">
+                      <Upload className="h-4 w-4 mr-2" />
+                      {imageFile ? 'Change Image' : 'Upload Image'}
+                    </Button>
                   </label>
                 </div>
-                
-                {imagePreview && (
-                  <div className="mt-3">
-                    <p className="text-sm text-gray-600 mb-2">Image Preview:</p>
-                    <img
-                      src={imagePreview}
-                      alt="Preview"
-                      className="h-48 w-auto object-cover rounded-lg border border-gray-200"
-                    />
-                  </div>
+                {uploadingImage && (
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 )}
               </div>
-              
-              <div className="flex justify-end space-x-3 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => navigate('/admin')}
-                  className="px-6"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={loading || uploadingImage}
-                  className="px-8 bg-blog-purple hover:bg-blog-dark-purple"
-                >
-                  {(loading || uploadingImage) && (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  )}
-                  {isEditMode ? 'Update' : 'Publish'} Post
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
+              {imagePreview && (
+                <div className="mt-4">
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                    className="max-h-48 rounded-lg object-cover"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Excerpt (Optional)</label>
+              <Textarea
+                name="excerpt"
+                value={formData.excerpt}
+                onChange={handleChange}
+                placeholder="Enter a short excerpt for your blog post"
+                rows={3}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Content</label>
+              <Textarea
+                name="description"
+                value={formData.description}
+                onChange={handleChange}
+                placeholder="Write your blog post content here"
+                rows={10}
+                required
+              />
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                type="submit"
+                disabled={loading || uploadingImage}
+                className="w-full sm:w-auto"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {isEditMode ? 'Updating...' : 'Creating...'}
+                  </>
+                ) : (
+                  isEditMode ? 'Update Blog Post' : 'Create Blog Post'
+                )}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 };
