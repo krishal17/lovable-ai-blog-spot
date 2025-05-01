@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { User, Upload } from 'lucide-react';
+import { User, Upload, Loader2 } from 'lucide-react';
 
 const Profile: React.FC = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -20,7 +20,7 @@ const Profile: React.FC = () => {
   const [updating, setUpdating] = useState(false);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   
-  const { currentUser } = useAuth();
+  const { currentUser, session } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -36,7 +36,10 @@ const Profile: React.FC = () => {
         const userProfile = await getUserProfile(currentUser.id);
         setProfile(userProfile);
         setUsername(userProfile.username || '');
-        setAvatarUrl(userProfile.avatarUrl);
+        
+        // Check for OAuth avatar first, then profile avatar
+        const oauthAvatar = session?.user?.user_metadata?.avatar_url;
+        setAvatarUrl(userProfile.avatarUrl || oauthAvatar || null);
       } catch (error) {
         console.error('Error fetching profile:', error);
         toast({
@@ -50,7 +53,7 @@ const Profile: React.FC = () => {
     };
 
     fetchProfile();
-  }, [currentUser, navigate, toast]);
+  }, [currentUser, navigate, toast, session]);
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -67,14 +70,13 @@ const Profile: React.FC = () => {
     
     try {
       const fileExt = avatarFile.name.split('.').pop();
-      const fileName = `${Date.now()}.${fileExt}`;
-      const filePath = `${currentUser.id}/${fileName}`;
+      const fileName = `${currentUser.id}/${Date.now()}.${fileExt}`;
       
       // Upload file to Supabase Storage
       const { error: uploadError } = await supabase
         .storage
         .from('profile_images')
-        .upload(filePath, avatarFile);
+        .upload(fileName, avatarFile);
       
       if (uploadError) throw uploadError;
       
@@ -82,7 +84,7 @@ const Profile: React.FC = () => {
       const { data } = supabase
         .storage
         .from('profile_images')
-        .getPublicUrl(filePath);
+        .getPublicUrl(fileName);
       
       return data.publicUrl;
     } catch (error) {
@@ -134,6 +136,10 @@ const Profile: React.FC = () => {
     }
   };
 
+  // Determine if user signed in via OAuth
+  const isOAuthUser = !!session?.user?.app_metadata?.provider && 
+                      session.user.app_metadata.provider !== 'email';
+
   if (loading) {
     return (
       <div className="blog-container py-12">
@@ -155,19 +161,24 @@ const Profile: React.FC = () => {
   return (
     <div className="blog-container py-12">
       <div className="max-w-md mx-auto">
-        <Card>
-          <CardHeader className="text-center">
+        <Card className="border-none shadow-lg">
+          <CardHeader className="text-center bg-gradient-to-r from-blog-lavender to-blog-purple text-white rounded-t-xl">
             <div className="flex justify-center mb-4">
-              <Avatar className="h-24 w-24">
+              <Avatar className="h-24 w-24 ring-4 ring-white">
                 <AvatarImage src={avatarUrl || undefined} />
-                <AvatarFallback className="text-2xl">
+                <AvatarFallback className="text-2xl bg-gray-100">
                   <User className="h-12 w-12 text-gray-400" />
                 </AvatarFallback>
               </Avatar>
             </div>
-            <CardTitle className="text-2xl">Your Profile</CardTitle>
+            <CardTitle className="text-2xl font-heading">Your Profile</CardTitle>
+            {isOAuthUser && (
+              <p className="text-white/80 text-sm">
+                Signed in with {session.user.app_metadata.provider}
+              </p>
+            )}
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid gap-2">
                 <Label htmlFor="avatar">Profile Picture</Label>
@@ -176,7 +187,7 @@ const Profile: React.FC = () => {
                     type="button" 
                     variant="outline"
                     onClick={() => document.getElementById('avatar')?.click()}
-                    className="flex items-center"
+                    className="flex items-center h-10"
                   >
                     <Upload className="mr-2 h-4 w-4" />
                     Choose File
@@ -204,6 +215,7 @@ const Profile: React.FC = () => {
                   type="email"
                   value={currentUser?.email || ''}
                   disabled
+                  className="bg-gray-50"
                 />
                 <p className="text-xs text-muted-foreground">
                   Your email address cannot be changed
@@ -218,15 +230,24 @@ const Profile: React.FC = () => {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="Your username"
+                  className="h-10"
                 />
+                <p className="text-xs text-muted-foreground">
+                  This is how you'll appear to other users
+                </p>
               </div>
               
               <Button 
                 type="submit" 
-                className="w-full" 
+                className="w-full bg-blog-purple hover:bg-blog-dark-purple" 
                 disabled={updating}
               >
-                {updating ? "Saving..." : "Save Changes"}
+                {updating ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : "Save Changes"}
               </Button>
             </form>
           </CardContent>

@@ -34,21 +34,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, newSession) => {
+        console.log("Auth state changed:", event, newSession?.user?.id);
+        
+        // Update session and user
         setSession(newSession);
         setCurrentUser(newSession?.user ?? null);
         
         // Check if user is admin
         if (newSession?.user) {
           const adminId = '95d1da8c-5e57-4886-8bdd-549e1fdf86c1';
-          setIsAdmin(newSession.user.id === adminId);
+          const isUserAdmin = newSession.user.id === adminId;
+          setIsAdmin(isUserAdmin);
+          
+          if (event === 'SIGNED_IN') {
+            // Handle successful sign-in
+            setTimeout(() => {
+              toast({
+                title: "Logged in successfully",
+                description: `Welcome${isUserAdmin ? ' Admin' : ''}!`,
+              });
+            }, 0);
+          }
         } else {
           setIsAdmin(false);
+          
+          if (event === 'SIGNED_OUT') {
+            // Handle sign-out
+            setTimeout(() => {
+              toast({
+                title: "Logged out",
+                description: "You've been successfully logged out",
+              });
+            }, 0);
+          }
         }
       }
     );
 
     // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+      console.log("Got existing session:", currentSession?.user?.id);
       setSession(currentSession);
       setCurrentUser(currentSession?.user ?? null);
       
@@ -66,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [toast]);
 
   const login = async (email: string, password: string) => {
     try {
@@ -80,10 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw error;
       }
       
-      toast({
-        title: "Login successful",
-        description: "Welcome back!",
-      });
+      // Toast is now handled in the auth state change listener
     } catch (error: any) {
       console.error("Login error:", error);
       toast({
@@ -105,10 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw error;
       }
       
-      toast({
-        title: "Logged out",
-        description: "You've been successfully logged out",
-      });
+      // Toast is now handled in the auth state change listener
     } catch (error: any) {
       console.error("Logout error:", error);
       toast({

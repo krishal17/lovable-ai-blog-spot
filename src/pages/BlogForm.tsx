@@ -19,12 +19,14 @@ import {
 import { BLOG_CATEGORIES } from '@/lib/utils';
 import { ChevronLeft, Upload, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 
 interface BlogFormData {
   title: string;
   description: string;
   imageUrl: string;
   category: string;
+  excerpt?: string;
 }
 
 const BlogForm: React.FC = () => {
@@ -32,19 +34,32 @@ const BlogForm: React.FC = () => {
   const isEditMode = !!id;
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { currentUser } = useAuth();
+  const { currentUser, isAdmin } = useAuth();
   
   const [formData, setFormData] = useState<BlogFormData>({
     title: '',
     description: '',
     imageUrl: '',
-    category: BLOG_CATEGORIES[0]
+    category: BLOG_CATEGORIES[0],
+    excerpt: ''
   });
   
   const [loading, setLoading] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>('');
   const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Ensure user is authorized
+  useEffect(() => {
+    if (!currentUser) {
+      toast({
+        variant: "destructive",
+        title: "Unauthorized",
+        description: "You must be logged in to create or edit blog posts."
+      });
+      navigate('/login');
+    }
+  }, [currentUser, navigate, toast]);
 
   // Fetch blog data if in edit mode
   useEffect(() => {
@@ -58,7 +73,8 @@ const BlogForm: React.FC = () => {
           title: blogData.title,
           description: blogData.description,
           imageUrl: blogData.imageUrl,
-          category: blogData.category
+          category: blogData.category,
+          excerpt: blogData.excerpt || ''
         });
         setImagePreview(blogData.imageUrl);
       } catch (error) {
@@ -103,22 +119,40 @@ const BlogForm: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  // Handle image upload to Supabase Storage
+  // Upload image to Storage
   const handleImageUpload = async () => {
-    if (!imageFile) return null;
+    if (!imageFile || !currentUser) return null;
     
     try {
       setUploadingImage(true);
-      const imageUrl = await uploadToCloudinary(imageFile);
       
-      if (imageUrl) {
-        toast({
-          title: "Success",
-          description: "Image uploaded successfully."
-        });
-        setFormData(prev => ({ ...prev, imageUrl }));
+      // Try Cloudinary first if available
+      try {
+        const cloudinaryUrl = await uploadToCloudinary(imageFile);
+        if (cloudinaryUrl) {
+          return cloudinaryUrl;
+        }
+      } catch (cloudinaryError) {
+        console.log('Cloudinary upload failed, falling back to Supabase storage');
       }
-      return imageUrl;
+      
+      // Fall back to Supabase Storage
+      const fileExt = imageFile.name.split('.').pop();
+      const fileName = `blog-images/${Date.now()}.${fileExt}`;
+      
+      const { data: uploadData, error: uploadError } = await supabase
+        .storage
+        .from('profile_images')
+        .upload(fileName, imageFile);
+      
+      if (uploadError) throw uploadError;
+      
+      const { data } = supabase
+        .storage
+        .from('profile_images')
+        .getPublicUrl(fileName);
+      
+      return data.publicUrl;
     } catch (error) {
       console.error('Error uploading image:', error);
       toast({
@@ -158,6 +192,15 @@ const BlogForm: React.FC = () => {
         return;
       }
       
+      if (!formData.category) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Please select a category for your blog post."
+        });
+        return;
+      }
+      
       // Upload image if a new one is selected
       let finalImageUrl = formData.imageUrl;
       if (imageFile) {
@@ -177,20 +220,24 @@ const BlogForm: React.FC = () => {
       }
 
       // Prepare final data
-      const finalData = {
+      const blogData = {
         ...formData,
-        imageUrl: finalImageUrl
+        imageUrl: finalImageUrl,
+        // Generate an excerpt if not provided
+        excerpt: formData.excerpt || formData.description.substring(0, 150) + '...'
       };
+      
+      console.log('Submitting blog data:', blogData);
       
       // Create or update blog post
       if (isEditMode && id) {
-        await updateBlogPost(id, finalData);
+        await updateBlogPost(id, blogData);
         toast({
           title: "Success",
           description: "Blog post updated successfully!"
         });
       } else {
-        await createBlogPost(finalData);
+        await createBlogPost(blogData);
         toast({
           title: "Success",
           description: "New blog post created successfully!"
@@ -239,32 +286,50 @@ const BlogForm: React.FC = () => {
           {isEditMode ? 'Edit Blog Post' : 'Create New Blog Post'}
         </h1>
         
-        <Card>
+        <Card className="shadow-lg border-none">
           <CardContent className="pt-6">
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
-                <label htmlFor="title" className="block text-sm font-medium">
+                <Label htmlFor="title" className="block text-sm font-medium">
                   Title <span className="text-red-500">*</span>
-                </label>
+                </Label>
                 <Input
                   id="title"
                   name="title"
                   value={formData.title}
                   onChange={handleChange}
                   placeholder="Enter blog title"
+                  className="h-12"
                   required
                 />
               </div>
               
               <div className="space-y-2">
-                <label htmlFor="category" className="block text-sm font-medium">
+                <Label htmlFor="excerpt" className="block text-sm font-medium">
+                  Excerpt <span className="text-gray-400 text-xs">(optional)</span>
+                </Label>
+                <Input
+                  id="excerpt"
+                  name="excerpt"
+                  value={formData.excerpt || ''}
+                  onChange={handleChange}
+                  placeholder="A short summary of your blog post"
+                  className="h-12"
+                />
+                <p className="text-xs text-muted-foreground">
+                  If left empty, an excerpt will be generated from your content
+                </p>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="category" className="block text-sm font-medium">
                   Category <span className="text-red-500">*</span>
-                </label>
+                </Label>
                 <Select 
                   value={formData.category} 
                   onValueChange={handleCategoryChange}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="h-12">
                     <SelectValue placeholder="Select a category" />
                   </SelectTrigger>
                   <SelectContent>
@@ -280,24 +345,25 @@ const BlogForm: React.FC = () => {
               </div>
               
               <div className="space-y-2">
-                <label htmlFor="description" className="block text-sm font-medium">
+                <Label htmlFor="description" className="block text-sm font-medium">
                   Content <span className="text-red-500">*</span>
-                </label>
+                </Label>
                 <Textarea
                   id="description"
                   name="description"
                   value={formData.description}
                   onChange={handleChange}
                   placeholder="Write your blog content here..."
-                  rows={8}
+                  rows={10}
+                  className="resize-y"
                   required
                 />
               </div>
               
               <div className="space-y-2">
-                <label htmlFor="image" className="block text-sm font-medium">
+                <Label htmlFor="image" className="block text-sm font-medium">
                   Featured Image
-                </label>
+                </Label>
                 <div className="mt-1 flex items-center">
                   <Input
                     id="image"
@@ -308,7 +374,7 @@ const BlogForm: React.FC = () => {
                   />
                   <label
                     htmlFor="image"
-                    className="cursor-pointer flex items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-4 w-full"
+                    className="cursor-pointer flex items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-4 w-full hover:border-blog-purple transition-colors"
                   >
                     <div className="space-y-1 text-center">
                       <Upload className="mx-auto h-10 w-10 text-gray-400" />
@@ -331,28 +397,30 @@ const BlogForm: React.FC = () => {
                     <img
                       src={imagePreview}
                       alt="Preview"
-                      className="h-48 w-auto object-cover rounded-lg"
+                      className="h-48 w-auto object-cover rounded-lg border border-gray-200"
                     />
                   </div>
                 )}
               </div>
               
-              <div className="flex justify-end space-x-3">
+              <div className="flex justify-end space-x-3 pt-4">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => navigate('/admin')}
+                  className="px-6"
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   disabled={loading || uploadingImage}
+                  className="px-8 bg-blog-purple hover:bg-blog-dark-purple"
                 >
                   {(loading || uploadingImage) && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
-                  {isEditMode ? 'Update' : 'Create'} Blog Post
+                  {isEditMode ? 'Update' : 'Publish'} Post
                 </Button>
               </div>
             </form>

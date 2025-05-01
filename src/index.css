@@ -73,4 +73,78 @@
   .blog-container {
     @apply container mx-auto px-4 md:px-6 py-6;
   }
+  
+  /* New enhancements */
+  .fancy-gradient {
+    @apply bg-gradient-to-r from-blog-purple to-blog-dark-purple text-white;
+  }
+  
+  .fancy-card {
+    @apply rounded-xl border border-gray-100 shadow-md hover:shadow-xl transition-all duration-300 bg-white overflow-hidden;
+  }
+  
+  .fancy-input {
+    @apply h-12 rounded-lg border border-gray-200 px-4 focus:border-blog-purple focus:ring-1 focus:ring-blog-purple transition-all;
+  }
+  
+  .hover-transform {
+    @apply transition-transform duration-300 hover:-translate-y-1;
+  }
+  
+  .hover-scale {
+    @apply transition-transform duration-300 hover:scale-105;
+  }
+  
+  .fancy-button {
+    @apply bg-blog-purple hover:bg-blog-dark-purple text-white rounded-lg px-6 py-3 font-medium transition-colors;
+  }
+  
+  .glass-card {
+    @apply rounded-xl backdrop-blur-md bg-white/80 shadow-lg border border-white/20;
+  }
+}
+
+/* Animate fade in */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+/* Button and interactive element animations */
+button, .interactive {
+  transition: all 0.2s ease;
+}
+
+button:active, .interactive:active {
+  transform: scale(0.98);
+}
+
+/* Improve scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(155, 135, 245, 0.5);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(155, 135, 245, 0.8);
+}
+
+/* Sexy text selection */
+::selection {
+  background-color: rgba(155, 135, 245, 0.3);
+  color: #333;
 }
