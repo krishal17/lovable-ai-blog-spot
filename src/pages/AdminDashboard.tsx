@@ -6,7 +6,7 @@ import { formatDate } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, Edit, Trash2 } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, RefreshCw } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,6 +21,7 @@ import {
 const AdminDashboard: React.FC = () => {
   const [blogs, setBlogs] = useState<BlogPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [blogToDelete, setBlogToDelete] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -39,12 +40,19 @@ const AdminDashboard: React.FC = () => {
       });
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
     fetchBlogs();
-  }, [toast]);
+  }, []);
+
+  // Refresh blogs list
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchBlogs();
+  };
 
   // Delete blog
   const handleDeleteBlog = async () => {
@@ -52,11 +60,18 @@ const AdminDashboard: React.FC = () => {
 
     try {
       await deleteBlogPost(blogToDelete);
-      setBlogs(blogs.filter(blog => blog.id !== blogToDelete));
+      
+      // Remove from local state to update UI immediately
+      setBlogs(prevBlogs => prevBlogs.filter(blog => blog.id !== blogToDelete));
+      
       toast({
         title: "Blog deleted",
-        description: "The blog post has been deleted successfully."
+        description: "The blog post has been deleted successfully.",
+        className: "bg-gradient-to-r from-green-500 to-emerald-500 text-white",
       });
+      
+      // Refresh the list after deletion to ensure sync with server
+      fetchBlogs();
     } catch (error) {
       console.error('Error deleting blog:', error);
       toast({
@@ -73,19 +88,25 @@ const AdminDashboard: React.FC = () => {
     <div className="blog-container">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-        <Link to="/admin/create">
-          <Button>
-            <PlusCircle className="mr-2 h-4 w-4" />
-            New Blog Post
+        <div className="flex space-x-2">
+          <Button variant="outline" onClick={handleRefresh} disabled={refreshing}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
           </Button>
-        </Link>
+          <Link to="/admin/create">
+            <Button>
+              <PlusCircle className="mr-2 h-4 w-4" />
+              New Blog Post
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {loading ? (
         <div className="animate-pulse space-y-4">
-          <div className="h-10 bg-blog-lavender rounded w-full"></div>
-          <div className="h-10 bg-blog-lavender rounded w-full"></div>
-          <div className="h-10 bg-blog-lavender rounded w-full"></div>
+          <div className="h-10 bg-gray-200 rounded w-full"></div>
+          <div className="h-10 bg-gray-200 rounded w-full"></div>
+          <div className="h-10 bg-gray-200 rounded w-full"></div>
         </div>
       ) : (
         <>
@@ -120,6 +141,11 @@ const AdminDashboard: React.FC = () => {
                           >
                             <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
+                          <Link to={`/blog/${blog.id}`} target="_blank">
+                            <Button variant="ghost" size="sm">
+                              View
+                            </Button>
+                          </Link>
                         </div>
                       </TableCell>
                     </TableRow>

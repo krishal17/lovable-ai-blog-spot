@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 
@@ -36,25 +37,33 @@ export interface UserProfile {
 export const createBlogPost = async (blogData: Omit<BlogPost, 'id' | 'createdAt' | 'updatedAt'>) => {
   const now = new Date().toISOString();
 
-  const { data, error } = await supabase
-    .from('blog_posts')
-    .insert({
-      title: blogData.title,
-      description: blogData.description,
-      image_url: blogData.imageUrl,
-      category: blogData.category,
-      created_at: now,
-      updated_at: now,
-      content_format: blogData.content_format,
-      excerpt: blogData.excerpt,
-      is_featured: blogData.is_featured || false
-    })
-    .select()
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('blog_posts')
+      .insert({
+        title: blogData.title,
+        description: blogData.description,
+        image_url: blogData.imageUrl,
+        category: blogData.category,
+        created_at: now,
+        updated_at: now,
+        content_format: blogData.content_format,
+        excerpt: blogData.excerpt,
+        is_featured: blogData.is_featured || false
+      })
+      .select()
+      .single();
 
-  if (error) throw error;
+    if (error) {
+      console.error('Error creating blog post:', error);
+      throw new Error(error.message || 'Failed to create blog post');
+    }
 
-  return transformBlogPost(data);
+    return transformBlogPost(data);
+  } catch (error: any) {
+    console.error('Error in createBlogPost:', error);
+    throw new Error(error.message || 'Failed to create blog post');
+  }
 };
 
 // Update an existing blog post
@@ -70,6 +79,10 @@ export const updateBlogPost = async (id: string, data: Partial<BlogPost>): Promi
     if (data.imageUrl) {
       updateData.image_url = data.imageUrl;
     }
+
+    // Log what we're updating
+    console.log('Updating blog post with ID:', id);
+    console.log('Update data:', updateData);
 
     const { data: updatedData, error: updateError } = await supabase
       .from('blog_posts')
@@ -97,6 +110,29 @@ export const updateBlogPost = async (id: string, data: Partial<BlogPost>): Promi
 // Delete a blog post
 export const deleteBlogPost = async (id: string): Promise<void> => {
   try {
+    console.log('Deleting blog post with ID:', id);
+    
+    // First, delete all comments associated with this blog post
+    const { error: commentsError } = await supabase
+      .from('comments')
+      .delete()
+      .eq('post_id', id);
+      
+    if (commentsError) {
+      console.error('Error deleting comments:', commentsError);
+    }
+    
+    // Then, delete all likes associated with this blog post
+    const { error: likesError } = await supabase
+      .from('likes')
+      .delete()
+      .eq('post_id', id);
+      
+    if (likesError) {
+      console.error('Error deleting likes:', likesError);
+    }
+
+    // Finally, delete the blog post
     const { error: deleteError } = await supabase
       .from('blog_posts')
       .delete()
@@ -106,6 +142,8 @@ export const deleteBlogPost = async (id: string): Promise<void> => {
       console.error('Error deleting blog post:', deleteError);
       throw new Error(deleteError.message || 'Failed to delete blog post');
     }
+    
+    console.log('Blog post deleted successfully');
   } catch (error: any) {
     console.error('Error in deleteBlogPost:', error);
     throw new Error(error.message || 'Failed to delete blog post');
@@ -114,27 +152,43 @@ export const deleteBlogPost = async (id: string): Promise<void> => {
 
 // Get a single blog post by ID
 export const getBlogPostById = async (id: string): Promise<BlogPost> => {
-  const { data, error } = await supabase
-    .from('blog_posts')
-    .select('*')
-    .eq('id', id)
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('blog_posts')
+      .select('*')
+      .eq('id', id)
+      .single();
 
-  if (error) throw error;
+    if (error) {
+      console.error('Error fetching blog post:', error);
+      throw new Error(error.message || 'Failed to fetch blog post');
+    }
 
-  return transformBlogPost(data);
+    return transformBlogPost(data);
+  } catch (error: any) {
+    console.error('Error in getBlogPostById:', error);
+    throw new Error(error.message || 'Failed to fetch blog post');
+  }
 };
 
 // Get all blog posts
 export const getAllBlogPosts = async (): Promise<BlogPost[]> => {
-  const { data, error } = await supabase
-    .from('blog_posts')
-    .select('*')
-    .order('created_at', { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from('blog_posts')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-  if (error) throw error;
+    if (error) {
+      console.error('Error fetching blog posts:', error);
+      throw new Error(error.message || 'Failed to fetch blog posts');
+    }
 
-  return data.map(transformBlogPost);
+    return data.map(transformBlogPost);
+  } catch (error: any) {
+    console.error('Error in getAllBlogPosts:', error);
+    throw new Error(error.message || 'Failed to fetch blog posts');
+  }
 };
 
 // Get all unique categories
@@ -205,7 +259,7 @@ export const toggleLike = async (blogId: string): Promise<boolean> => {
   const { data: existingLike } = await supabase
     .from('likes')
     .select('id')
-    .eq('blog_id', blogId)
+    .eq('post_id', blogId)
     .eq('user_id', userData.user.id)
     .single();
 
@@ -223,7 +277,7 @@ export const toggleLike = async (blogId: string): Promise<boolean> => {
     const { error } = await supabase
       .from('likes')
       .insert({
-        blog_id: blogId,
+        post_id: blogId,
         user_id: userData.user.id
       });
 
@@ -239,7 +293,7 @@ export const isPostLiked = async (blogId: string): Promise<boolean> => {
   const { data } = await supabase
     .from('likes')
     .select('id')
-    .eq('blog_id', blogId)
+    .eq('post_id', blogId)
     .eq('user_id', userData.user.id)
     .single();
 
@@ -250,7 +304,7 @@ export const getLikesCount = async (blogId: string): Promise<number> => {
   const { count, error } = await supabase
     .from('likes')
     .select('id', { count: 'exact', head: true })
-    .eq('blog_id', blogId);
+    .eq('post_id', blogId);
 
   if (error) throw error;
   return count || 0;
@@ -258,21 +312,29 @@ export const getLikesCount = async (blogId: string): Promise<number> => {
 
 // User profile functions
 export const getUserProfile = async (userId: string): Promise<UserProfile> => {
-  const { data, error } = await supabase
-    .from('user_profiles')
-    .select('*')
-    .eq('id', userId)
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
 
-  if (error) throw error;
+    if (error) {
+      console.error('Error fetching user profile:', error);
+      throw error;
+    }
 
-  return {
-    id: data.id,
-    username: data.username,
-    avatarUrl: data.avatar_url,
-    createdAt: data.created_at,
-    updatedAt: data.updated_at
-  };
+    return {
+      id: data.id,
+      username: data.username,
+      avatarUrl: data.avatar_url,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at
+    };
+  } catch (error) {
+    console.error('Error in getUserProfile:', error);
+    throw error;
+  }
 };
 
 export const updateUserProfile = async (userId: string, profile: Partial<UserProfile>): Promise<UserProfile> => {
@@ -336,7 +398,7 @@ function transformBlogPost(post: any): BlogPost {
 function transformComment(comment: any): Comment {
   return {
     id: comment.id,
-    blogId: comment.blog_id,
+    blogId: comment.blog_id || comment.post_id,
     userId: comment.user_id,
     content: comment.content,
     createdAt: comment.created_at,

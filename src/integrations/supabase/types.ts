@@ -9,6 +9,47 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      alerts: {
+        Row: {
+          alert_type: string
+          created_at: string
+          description: string | null
+          id: string
+          is_resolved: boolean | null
+          severity: string
+          timestamp: string
+          vehicle_id: string
+        }
+        Insert: {
+          alert_type: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_resolved?: boolean | null
+          severity: string
+          timestamp?: string
+          vehicle_id: string
+        }
+        Update: {
+          alert_type?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_resolved?: boolean | null
+          severity?: string
+          timestamp?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alerts_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       blog_posts: {
         Row: {
           category: string
@@ -50,64 +91,235 @@ export type Database = {
       }
       comments: {
         Row: {
-          blog_id: string
           content: string
           created_at: string
           id: string
-          updated_at: string | null
+          post_id: string
+          user_avatar: string | null
           user_id: string
+          user_name: string
         }
         Insert: {
-          blog_id: string
           content: string
           created_at?: string
           id?: string
-          updated_at?: string | null
+          post_id: string
+          user_avatar?: string | null
           user_id: string
+          user_name: string
         }
         Update: {
-          blog_id?: string
           content?: string
           created_at?: string
           id?: string
-          updated_at?: string | null
+          post_id?: string
+          user_avatar?: string | null
           user_id?: string
+          user_name?: string
+        }
+        Relationships: []
+      }
+      drivers: {
+        Row: {
+          assigned_vehicle_id: string | null
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          phone: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_vehicle_id?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          phone?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_vehicle_id?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          phone?: string | null
+          status?: string
+          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "comments_blog_id_fkey"
-            columns: ["blog_id"]
+            foreignKeyName: "drivers_assigned_vehicle_id_fkey"
+            columns: ["assigned_vehicle_id"]
             isOneToOne: false
-            referencedRelation: "blog_posts"
+            referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
         ]
       }
-      likes: {
+      geofences: {
         Row: {
-          blog_id: string
+          coordinates: Json
           created_at: string
+          description: string | null
           id: string
-          user_id: string
+          is_active: boolean | null
+          name: string
+          updated_at: string
         }
         Insert: {
-          blog_id: string
+          coordinates: Json
           created_at?: string
+          description?: string | null
           id?: string
-          user_id: string
+          is_active?: boolean | null
+          name: string
+          updated_at?: string
         }
         Update: {
-          blog_id?: string
+          coordinates?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      likes: {
+        Row: {
+          created_at: string
+          id: string
+          post_id: string
+          user_avatar: string | null
+          user_id: string
+          user_name: string
+        }
+        Insert: {
           created_at?: string
           id?: string
+          post_id: string
+          user_avatar?: string | null
+          user_id: string
+          user_name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          post_id?: string
+          user_avatar?: string | null
           user_id?: string
+          user_name?: string
+        }
+        Relationships: []
+      }
+      maintenance_schedules: {
+        Row: {
+          created_at: string
+          due_date: string | null
+          due_mileage: number | null
+          id: string
+          is_completed: boolean | null
+          maintenance_type: string
+          updated_at: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          due_date?: string | null
+          due_mileage?: number | null
+          id?: string
+          is_completed?: boolean | null
+          maintenance_type: string
+          updated_at?: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          due_date?: string | null
+          due_mileage?: number | null
+          id?: string
+          is_completed?: boolean | null
+          maintenance_type?: string
+          updated_at?: string
+          vehicle_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "likes_blog_id_fkey"
-            columns: ["blog_id"]
+            foreignKeyName: "maintenance_schedules_vehicle_id_fkey"
+            columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: "blog_posts"
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trips: {
+        Row: {
+          created_at: string
+          distance_km: number | null
+          driver_id: string
+          end_lat: number | null
+          end_lng: number | null
+          end_time: string | null
+          fuel_used: number | null
+          id: string
+          start_lat: number | null
+          start_lng: number | null
+          start_time: string | null
+          status: string
+          updated_at: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          distance_km?: number | null
+          driver_id: string
+          end_lat?: number | null
+          end_lng?: number | null
+          end_time?: string | null
+          fuel_used?: number | null
+          id?: string
+          start_lat?: number | null
+          start_lng?: number | null
+          start_time?: string | null
+          status?: string
+          updated_at?: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          distance_km?: number | null
+          driver_id?: string
+          end_lat?: number | null
+          end_lng?: number | null
+          end_time?: string | null
+          fuel_used?: number | null
+          id?: string
+          start_lat?: number | null
+          start_lng?: number | null
+          start_time?: string | null
+          status?: string
+          updated_at?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trips_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trips_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
         ]
@@ -133,6 +345,48 @@ export type Database = {
           id?: string
           updated_at?: string
           username?: string | null
+        }
+        Relationships: []
+      }
+      vehicles: {
+        Row: {
+          created_at: string
+          fuel_level: number | null
+          id: string
+          last_lat: number | null
+          last_lng: number | null
+          license_plate: string
+          model: string | null
+          name: string
+          status: string
+          updated_at: string
+          year: number | null
+        }
+        Insert: {
+          created_at?: string
+          fuel_level?: number | null
+          id?: string
+          last_lat?: number | null
+          last_lng?: number | null
+          license_plate: string
+          model?: string | null
+          name: string
+          status?: string
+          updated_at?: string
+          year?: number | null
+        }
+        Update: {
+          created_at?: string
+          fuel_level?: number | null
+          id?: string
+          last_lat?: number | null
+          last_lng?: number | null
+          license_plate?: string
+          model?: string | null
+          name?: string
+          status?: string
+          updated_at?: string
+          year?: number | null
         }
         Relationships: []
       }

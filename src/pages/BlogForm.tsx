@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { createBlogPost, updateBlogPost, getBlogPostById, BlogPost } from '@/lib/firestore';
@@ -7,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -15,10 +17,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { BLOG_CATEGORIES } from '@/lib/utils';
-import { ChevronLeft, Upload, Loader2 } from 'lucide-react';
+import { 
+  Bold, 
+  Italic, 
+  Underline, 
+  AlignLeft, 
+  AlignCenter, 
+  AlignRight,
+  ChevronLeft, 
+  Upload, 
+  Loader2 
+} from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { Toggle } from "@/components/ui/toggle";
 
 interface BlogFormData {
   title: string;
@@ -26,6 +38,12 @@ interface BlogFormData {
   imageUrl: string;
   category: string;
   excerpt?: string;
+  content_format?: {
+    font: string;
+    size: string;
+    style: string;
+    alignment?: string;
+  };
 }
 
 const BlogForm: React.FC = () => {
@@ -39,14 +57,31 @@ const BlogForm: React.FC = () => {
     title: '',
     description: '',
     imageUrl: '',
-    category: BLOG_CATEGORIES[0],
-    excerpt: ''
+    category: '',
+    excerpt: '',
+    content_format: {
+      font: 'default',
+      size: 'normal',
+      style: 'normal',
+      alignment: 'left'
+    }
   });
 
   const [loading, setLoading] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>('');
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [selectedTextFormat, setSelectedTextFormat] = useState<{
+    bold: boolean;
+    italic: boolean;
+    underline: boolean;
+    alignment: 'left' | 'center' | 'right';
+  }>({
+    bold: false,
+    italic: false,
+    underline: false,
+    alignment: 'left'
+  });
 
   // Ensure user is authorized
   useEffect(() => {
@@ -74,8 +109,26 @@ const BlogForm: React.FC = () => {
             description: blogData.description,
             imageUrl: blogData.imageUrl,
             category: blogData.category,
-            excerpt: blogData.excerpt || ''
+            excerpt: blogData.excerpt || '',
+            content_format: blogData.content_format || {
+              font: 'default',
+              size: 'normal',
+              style: 'normal',
+              alignment: 'left'
+            }
           });
+          
+          // Set text formatting options based on content_format
+          if (blogData.content_format) {
+            const style = blogData.content_format.style || 'normal';
+            setSelectedTextFormat({
+              bold: style.includes('bold'),
+              italic: style.includes('italic'),
+              underline: style.includes('underline'),
+              alignment: (blogData.content_format.alignment as 'left' | 'center' | 'right') || 'left'
+            });
+          }
+          
           setImagePreview(blogData.imageUrl);
         }
       } catch (error) {
@@ -103,6 +156,41 @@ const BlogForm: React.FC = () => {
   // Handle category change
   const handleCategoryChange = (value: string) => {
     setFormData(prev => ({ ...prev, category: value }));
+  };
+
+  // Handle text formatting
+  const handleFormatChange = (format: 'bold' | 'italic' | 'underline') => {
+    setSelectedTextFormat(prev => {
+      const updated = { ...prev, [format]: !prev[format] };
+      
+      // Update content_format style
+      let style = 'normal';
+      if (updated.bold) style += ' bold';
+      if (updated.italic) style += ' italic';
+      if (updated.underline) style += ' underline';
+      
+      setFormData(prevData => ({
+        ...prevData,
+        content_format: {
+          ...prevData.content_format!,
+          style
+        }
+      }));
+      
+      return updated;
+    });
+  };
+
+  // Handle alignment change
+  const handleAlignmentChange = (alignment: 'left' | 'center' | 'right') => {
+    setSelectedTextFormat(prev => ({ ...prev, alignment }));
+    setFormData(prev => ({
+      ...prev,
+      content_format: {
+        ...prev.content_format!,
+        alignment
+      }
+    }));
   };
 
   // Handle image selection
@@ -147,10 +235,6 @@ const BlogForm: React.FC = () => {
     try {
       setUploadingImage(true);
 
-      // Upload to Supabase Storage
-      const fileExt = imageFile.name.split('.').pop();
-      const fileName = `${currentUser.uid}/${Date.now()}.${fileExt}`;
-
       // First check if bucket exists
       const { data: buckets, error: bucketError } = await supabase
         .storage
@@ -177,13 +261,17 @@ const BlogForm: React.FC = () => {
         }
       }
 
+      // Generate a unique file name to avoid conflicts during updates
+      const fileExt = imageFile.name.split('.').pop();
+      const fileName = `${currentUser.uid}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
+
       // Upload the file
       const { data: uploadData, error: uploadError } = await supabase
         .storage
         .from('blog_images')
         .upload(fileName, imageFile, {
           cacheControl: '3600',
-          upsert: false
+          upsert: true // Allow overwriting files
         });
 
       if (uploadError) {
@@ -268,7 +356,8 @@ const BlogForm: React.FC = () => {
         imageUrl: finalImageUrl,
         category: formData.category,
         excerpt: formData.excerpt,
-        is_featured: false
+        is_featured: false,
+        content_format: formData.content_format
       };
 
       let updatedPost;
@@ -323,8 +412,9 @@ const BlogForm: React.FC = () => {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Title</label>
+              <Label htmlFor="title">Title</Label>
               <Input
+                id="title"
                 name="title"
                 value={formData.title}
                 onChange={handleChange}
@@ -334,17 +424,17 @@ const BlogForm: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Category</label>
+              <Label htmlFor="category">Category</Label>
               <Select
                 value={formData.category}
                 onValueChange={handleCategoryChange}
               >
-                <SelectTrigger>
+                <SelectTrigger id="category">
                   <SelectValue placeholder="Select a category" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    {BLOG_CATEGORIES.map((category) => (
+                    {['Technology', 'Lifestyle', 'Travel', 'Food', 'Fashion', 'Health', 'Sports', 'Business', 'Entertainment', 'Other'].map((category) => (
                       <SelectItem key={category} value={category}>
                         {category}
                       </SelectItem>
@@ -355,7 +445,7 @@ const BlogForm: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Featured Image</label>
+              <Label htmlFor="image-upload">Featured Image</Label>
               <div className="flex items-center space-x-4">
                 <div className="relative">
                   <input
@@ -391,8 +481,9 @@ const BlogForm: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Excerpt (Optional)</label>
+              <Label htmlFor="excerpt">Excerpt (Optional)</Label>
               <Textarea
+                id="excerpt"
                 name="excerpt"
                 value={formData.excerpt}
                 onChange={handleChange}
@@ -402,14 +493,68 @@ const BlogForm: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Content</label>
+              <Label>Text Formatting</Label>
+              <div className="flex items-center space-x-2 border rounded-md p-2">
+                <Toggle
+                  pressed={selectedTextFormat.bold}
+                  onPressedChange={() => handleFormatChange('bold')}
+                  aria-label="Toggle bold"
+                >
+                  <Bold className="h-4 w-4" />
+                </Toggle>
+                <Toggle
+                  pressed={selectedTextFormat.italic}
+                  onPressedChange={() => handleFormatChange('italic')}
+                  aria-label="Toggle italic"
+                >
+                  <Italic className="h-4 w-4" />
+                </Toggle>
+                <Toggle
+                  pressed={selectedTextFormat.underline}
+                  onPressedChange={() => handleFormatChange('underline')}
+                  aria-label="Toggle underline"
+                >
+                  <Underline className="h-4 w-4" />
+                </Toggle>
+                <div className="border-l h-6 mx-2" />
+                <Toggle
+                  pressed={selectedTextFormat.alignment === 'left'}
+                  onPressedChange={() => handleAlignmentChange('left')}
+                  aria-label="Align left"
+                >
+                  <AlignLeft className="h-4 w-4" />
+                </Toggle>
+                <Toggle
+                  pressed={selectedTextFormat.alignment === 'center'}
+                  onPressedChange={() => handleAlignmentChange('center')}
+                  aria-label="Align center"
+                >
+                  <AlignCenter className="h-4 w-4" />
+                </Toggle>
+                <Toggle
+                  pressed={selectedTextFormat.alignment === 'right'}
+                  onPressedChange={() => handleAlignmentChange('right')}
+                  aria-label="Align right"
+                >
+                  <AlignRight className="h-4 w-4" />
+                </Toggle>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="content">Content</Label>
               <Textarea
+                id="content"
                 name="description"
                 value={formData.description}
                 onChange={handleChange}
                 placeholder="Write your blog post content here"
                 rows={10}
                 required
+                className={`${selectedTextFormat.bold ? 'font-bold' : ''} 
+                           ${selectedTextFormat.italic ? 'italic' : ''} 
+                           ${selectedTextFormat.underline ? 'underline' : ''} 
+                           text-${selectedTextFormat.alignment}`}
               />
             </div>
 

@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { useToast } from "@/hooks/use-toast";
@@ -32,22 +33,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
 
   useEffect(() => {
+    // Set up auth state listener FIRST to avoid missing auth events
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setSession(session);
-        setCurrentUser(session?.user ?? null);
+      async (event, newSession) => {
+        console.log("Auth state changed:", event, newSession?.user?.id);
+        setSession(newSession);
+        setCurrentUser(newSession?.user ?? null);
 
-        if (session?.user) {
-          const adminId = '32c9460c-ce5b-4143-b6e2-31edde1f0326';
-          setIsAdmin(session.user.id === adminId);
+        if (newSession?.user) {
+          // Check if user is admin - using your specific admin ID
+          // This can be replaced with a more robust role-based system
+          const isUserAdmin = newSession.user.id === '32c9460c-ce5b-4143-b6e2-31edde1f0326';
+          setIsAdmin(isUserAdmin);
+          
+          console.log("Is admin:", isUserAdmin);
         } else {
           setIsAdmin(false);
         }
 
+        // Show appropriate toast notifications
         if (event === 'SIGNED_IN') {
           toast({
             title: "Welcome back! 👋",
-            description: `Logged in as ${session?.user?.user_metadata?.full_name || session?.user?.email}`,
+            description: `Logged in as ${newSession?.user?.user_metadata?.full_name || newSession?.user?.email}`,
             className: "bg-gradient-to-r from-purple-500 to-pink-500 text-white",
           });
         } else if (event === 'SIGNED_OUT') {
@@ -74,8 +82,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Check if user is admin
       if (currentSession?.user) {
-        const adminId = '32c9460c-ce5b-4143-b6e2-31edde1f0326';
-        setIsAdmin(currentSession.user.id === adminId);
+        const isUserAdmin = currentSession.user.id === '32c9460c-ce5b-4143-b6e2-31edde1f0326';
+        setIsAdmin(isUserAdmin);
+        console.log("Is admin (initial):", isUserAdmin);
       } else {
         setIsAdmin(false);
       }
@@ -103,38 +112,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         variant: "destructive",
         title: "Oops! Login failed 😔",
         description: error?.message || "Invalid email or password",
-        className: "bg-gradient-to-r from-red-500 to-rose-500 text-white",
-      });
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const register = async (email: string, password: string) => {
-    try {
-      setLoading(true);
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Almost there! ✨",
-        description: "Please check your email to verify your account",
-        className: "bg-gradient-to-r from-purple-500 to-indigo-500 text-white",
-      });
-    } catch (error: any) {
-      console.error("Registration error:", error);
-      toast({
-        variant: "destructive",
-        title: "Registration failed 😔",
-        description: error?.message || "Failed to create account",
         className: "bg-gradient-to-r from-red-500 to-rose-500 text-white",
       });
       throw error;
@@ -215,7 +192,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     loading,
     login,
-    register,
     loginWithGoogle,
     loginWithGithub,
     logout,
