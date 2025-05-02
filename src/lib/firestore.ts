@@ -33,7 +33,7 @@ export interface UserProfile {
   updatedAt: string;
 }
 
-// Get all users - This function was missing and causing the error
+// Get all users
 export const getAllUsers = async (): Promise<UserProfile[]> => {
   try {
     const { data, error } = await supabase
@@ -77,22 +77,25 @@ export const createBlogPost = async (blogData: Omit<BlogPost, 'id' | 'createdAt'
         excerpt: blogData.excerpt,
         is_featured: blogData.is_featured || false
       })
-      .select()
-      .single();
+      .select();
 
     if (error) {
       console.error('Error creating blog post:', error);
       throw new Error(error.message || 'Failed to create blog post');
     }
 
-    return transformBlogPost(data);
+    if (!data || data.length === 0) {
+      throw new Error('No data returned after creating blog post');
+    }
+
+    return transformBlogPost(data[0]);
   } catch (error: any) {
     console.error('Error in createBlogPost:', error);
     throw new Error(error.message || 'Failed to create blog post');
   }
 };
 
-// Update an existing blog post - FIXED: Now handling empty response correctly
+// Update an existing blog post
 export const updateBlogPost = async (id: string, data: Partial<BlogPost>): Promise<BlogPost> => {
   try {
     // Prepare update data
@@ -112,51 +115,39 @@ export const updateBlogPost = async (id: string, data: Partial<BlogPost>): Promi
     console.log('Updating blog post with ID:', id);
     console.log('Update data:', updateData);
 
-    // First verify the post exists
-    const { data: existingPost, error: checkError } = await supabase
-      .from('blog_posts')
-      .select('id')
-      .eq('id', id)
-      .single();
-    
-    if (checkError) {
-      console.error('Error checking blog post:', checkError);
-      throw new Error(checkError.message || 'Failed to find blog post');
-    }
-    
-    if (!existingPost) {
-      throw new Error('No blog post found with the given ID');
-    }
-
     // Now update the post
     const { data: updatedData, error: updateError } = await supabase
       .from('blog_posts')
       .update(updateData)
       .eq('id', id)
-      .select()
-      .single();
+      .select();
 
     if (updateError) {
       console.error('Error updating blog post:', updateError);
       throw new Error(updateError.message || 'Failed to update blog post');
     }
 
-    if (!updatedData) {
-      // This is a fallback - we'll re-fetch the post if the update didn't return data
-      const { data: refetchedPost, error: refetchError } = await supabase
+    if (!updatedData || updatedData.length === 0) {
+      // Try to fetch the post to see if it exists
+      const { data: existingPost, error: fetchError } = await supabase
         .from('blog_posts')
         .select('*')
         .eq('id', id)
-        .single();
+        .maybeSingle();
         
-      if (refetchError || !refetchedPost) {
-        throw new Error('Failed to fetch updated blog post');
+      if (fetchError) {
+        console.error('Error fetching blog post:', fetchError);
+        throw new Error(fetchError.message || 'Failed to fetch blog post after update');
       }
       
-      return transformBlogPost(refetchedPost);
+      if (!existingPost) {
+        throw new Error('No blog post found with the given ID');
+      }
+      
+      return transformBlogPost(existingPost);
     }
 
-    return transformBlogPost(updatedData);
+    return transformBlogPost(updatedData[0]);
   } catch (error: any) {
     console.error('Error in updateBlogPost:', error);
     throw new Error(error.message || 'Failed to update blog post');
@@ -213,11 +204,15 @@ export const getBlogPostById = async (id: string): Promise<BlogPost> => {
       .from('blog_posts')
       .select('*')
       .eq('id', id)
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error('Error fetching blog post:', error);
       throw new Error(error.message || 'Failed to fetch blog post');
+    }
+
+    if (!data) {
+      throw new Error(`Blog post with ID ${id} not found`);
     }
 
     return transformBlogPost(data);
@@ -240,6 +235,7 @@ export const getAllBlogPosts = async (): Promise<BlogPost[]> => {
       throw new Error(error.message || 'Failed to fetch blog posts');
     }
 
+    if (!data) return [];
     return data.map(transformBlogPost);
   } catch (error: any) {
     console.error('Error in getAllBlogPosts:', error);
@@ -261,6 +257,7 @@ export const getBlogPostsByCategory = async (category: string): Promise<BlogPost
       throw new Error(error.message || 'Failed to fetch blog posts by category');
     }
 
+    if (!data) return [];
     return data.map(transformBlogPost);
   } catch (error: any) {
     console.error('Error in getBlogPostsByCategory:', error);
@@ -280,6 +277,62 @@ export const getAllCategories = async (): Promise<string[]> => {
   // Extract unique categories
   const uniqueCategories = [...new Set(data.map(item => item.category))];
   return uniqueCategories;
+};
+
+// Upload image to Supabase Storage
+export const uploadImageToSupabase = async (file: File): Promise<string> => {
+  try {
+    // Check if the 'blog-images' bucket exists, create it if not
+    const { data: buckets } = await supabase.storage.listBuckets();
+    
+    if (!buckets?.find(bucket => bucket.name === 'blog-images')) {
+      const { data, error } = await supabase.storage.createBucket('blog-images', { 
+        public: true,
+        fileSizeLimit: 5242880 // 5MB
+      });
+      
+      if (error) {
+        console.error("Error creating bucket:", error);
+        throw error;
+      }
+      
+      console.log("Created new bucket:", data);
+    }
+    
+    // Generate a unique file name
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+    
+    console.log('Uploading file:', fileName, 'type:', file.type);
+    
+    // Upload the file
+    const { error: uploadError, data: uploadData } = await supabase.storage
+      .from('blog-images')
+      .upload(fileName, file, {
+        contentType: file.type,
+        cacheControl: '3600'
+      });
+    
+    if (uploadError) {
+      console.error('Upload error:', uploadError);
+      throw uploadError;
+    }
+    
+    console.log('Upload successful:', uploadData);
+    
+    // Get the public URL
+    const { data } = supabase.storage.from('blog-images').getPublicUrl(fileName);
+    
+    if (!data || !data.publicUrl) {
+      throw new Error('Failed to get public URL for uploaded file');
+    }
+    
+    console.log('Public URL:', data.publicUrl);
+    return data.publicUrl;
+  } catch (error) {
+    console.error('Error uploading image to Supabase:', error);
+    throw error;
+  }
 };
 
 // Comments related functions

@@ -1,7 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { createBlogPost, updateBlogPost, getBlogPostById } from '@/lib/firestore';
-import { uploadImage } from '@/lib/storage';
+import { createBlogPost, updateBlogPost, getBlogPostById, uploadImageToSupabase } from '@/lib/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -29,7 +29,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Toggle } from "@/components/ui/toggle";
-import { supabase } from '@/integrations/supabase/client';
 
 interface BlogFormData {
   title: string;
@@ -235,34 +234,12 @@ const BlogForm: React.FC = () => {
 
     try {
       setUploadingImage(true);
-      // Check if the 'blog-images' bucket exists, create it if not
-      const { data: buckets } = await supabase.storage.listBuckets();
-      
-      if (!buckets?.find(bucket => bucket.name === 'blog-images')) {
-        await supabase.storage.createBucket('blog-images', { 
-          public: true,
-          fileSizeLimit: 5242880 // 5MB
-        });
-      }
-      
-      // Generate a unique file name
-      const fileExt = imageFile.name.split('.').pop();
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      
-      // Upload the file
-      const { error: uploadError } = await supabase.storage
-        .from('blog-images')
-        .upload(fileName, imageFile);
-      
-      if (uploadError) {
-        throw uploadError;
-      }
-      
-      // Get the public URL
-      const { data } = supabase.storage.from('blog-images').getPublicUrl(fileName);
-      return data.publicUrl;
+      console.log('Uploading image:', imageFile.name, imageFile.type);
+      const imageUrl = await uploadImageToSupabase(imageFile);
+      console.log('Image uploaded successfully:', imageUrl);
+      return imageUrl;
     } catch (error) {
-      console.error('Error uploading image:', error);
+      console.error('Error in handleImageUpload:', error);
       throw error;
     } finally {
       setUploadingImage(false);
@@ -312,12 +289,12 @@ const BlogForm: React.FC = () => {
           if (imageUrl) {
             finalImageUrl = imageUrl;
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error('Image upload error:', error);
           toast({
             variant: "destructive",
             title: "Image Upload Failed",
-            description: "Failed to upload image. Please try again."
+            description: error.message || "Failed to upload image. Please try again."
           });
           return;
         }
@@ -339,6 +316,7 @@ const BlogForm: React.FC = () => {
       if (isEditMode && id) {
         try {
           updatedPost = await updateBlogPost(id, blogData);
+          console.log('Blog updated successfully:', updatedPost);
           toast({
             title: "Success!",
             description: "Blog post updated successfully.",
@@ -354,16 +332,27 @@ const BlogForm: React.FC = () => {
           return;
         }
       } else {
-        updatedPost = await createBlogPost(blogData);
-        toast({
-          title: "Success!",
-          description: "Blog post created successfully.",
-          className: "bg-gradient-to-r from-green-500 to-emerald-500 text-white",
-        });
+        try {
+          updatedPost = await createBlogPost(blogData);
+          console.log('Blog created successfully:', updatedPost);
+          toast({
+            title: "Success!",
+            description: "Blog post created successfully.",
+            className: "bg-gradient-to-r from-green-500 to-emerald-500 text-white",
+          });
+        } catch (error: any) {
+          console.error('Failed to create post:', error);
+          toast({
+            variant: "destructive",
+            title: "Creation Failed",
+            description: error.message || "Failed to create blog post. Please try again."
+          });
+          return;
+        }
       }
 
       // Navigate to the blog post view or admin dashboard
-      if (updatedPost) {
+      if (updatedPost && updatedPost.id) {
         navigate(`/blog/${updatedPost.id}`);
       } else {
         // Fallback if no post was returned
@@ -532,9 +521,9 @@ const BlogForm: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="content">Content</Label>
+              <Label htmlFor="description">Content</Label>
               <Textarea
-                id="content"
+                id="description"
                 name="description"
                 value={formData.description}
                 onChange={handleChange}
