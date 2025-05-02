@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getBlogPostById, BlogPost } from '@/lib/firestore';
+import { getBlogPostById, BlogPost, getCommentsByBlogId } from '@/lib/firestore';
 import { formatDate } from '@/lib/utils';
 import { ChevronLeft, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -13,6 +14,7 @@ const BlogDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [blog, setBlog] = useState<BlogPost | null>(null);
   const [loading, setLoading] = useState(true);
+  const [commentCount, setCommentCount] = useState(0);
   const { toast } = useToast();
   const { isAdmin } = useAuth();
 
@@ -24,6 +26,10 @@ const BlogDetail: React.FC = () => {
         setLoading(true);
         const blogData = await getBlogPostById(id);
         setBlog(blogData);
+        
+        // Fetch comments count
+        const comments = await getCommentsByBlogId(id);
+        setCommentCount(comments.length);
       } catch (error) {
         console.error('Error fetching blog:', error);
         toast({
@@ -105,7 +111,7 @@ const BlogDetail: React.FC = () => {
             <div className="flex items-center space-x-4">
               <LikeButton postId={blog.id} />
               <span className="text-sm text-gray-500">
-                {blog.comments?.length || 0} Comments
+                {commentCount} Comments
               </span>
             </div>
           </div>

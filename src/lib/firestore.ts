@@ -210,11 +210,23 @@ export const addComment = async (blogId: string, content: string): Promise<Comme
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) throw new Error("User must be logged in to comment");
 
+  // Get user profile info
+  const { data: profileData } = await supabase
+    .from('user_profiles')
+    .select('username, avatar_url')
+    .eq('id', userData.user.id)
+    .single();
+
+  const username = profileData?.username || userData.user.email?.split('@')[0] || 'Anonymous';
+
+  // Add the comment with user information
   const { data, error } = await supabase
     .from('comments')
     .insert({
-      blog_id: blogId,
+      post_id: blogId,
       user_id: userData.user.id,
+      user_name: username,
+      user_avatar: profileData?.avatar_url || null,
       content: content,
       created_at: new Date().toISOString()
     })
@@ -229,16 +241,21 @@ export const addComment = async (blogId: string, content: string): Promise<Comme
 export const getCommentsByBlogId = async (blogId: string): Promise<Comment[]> => {
   const { data, error } = await supabase
     .from('comments')
-    .select(`
-      *,
-      user_profiles(username, avatar_url)
-    `)
-    .eq('blog_id', blogId)
+    .select('*')
+    .eq('post_id', blogId)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
 
-  return data.map(transformComment);
+  return data.map(comment => ({
+    id: comment.id,
+    blogId: comment.post_id,
+    userId: comment.user_id,
+    content: comment.content,
+    createdAt: comment.created_at,
+    username: comment.user_name,
+    avatarUrl: comment.user_avatar
+  }));
 };
 
 export const deleteComment = async (commentId: string) => {
@@ -254,6 +271,15 @@ export const deleteComment = async (commentId: string) => {
 export const toggleLike = async (blogId: string): Promise<boolean> => {
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) throw new Error("User must be logged in to like posts");
+
+  // Get user profile info
+  const { data: profileData } = await supabase
+    .from('user_profiles')
+    .select('username, avatar_url')
+    .eq('id', userData.user.id)
+    .single();
+
+  const username = profileData?.username || userData.user.email?.split('@')[0] || 'Anonymous';
 
   // Check if already liked
   const { data: existingLike } = await supabase
@@ -278,7 +304,10 @@ export const toggleLike = async (blogId: string): Promise<boolean> => {
       .from('likes')
       .insert({
         post_id: blogId,
-        user_id: userData.user.id
+        user_id: userData.user.id,
+        user_name: username,
+        user_avatar: profileData?.avatar_url || null,
+        created_at: new Date().toISOString()
       });
 
     if (error) throw error;
@@ -398,11 +427,11 @@ function transformBlogPost(post: any): BlogPost {
 function transformComment(comment: any): Comment {
   return {
     id: comment.id,
-    blogId: comment.blog_id || comment.post_id,
+    blogId: comment.post_id,
     userId: comment.user_id,
     content: comment.content,
     createdAt: comment.created_at,
-    username: comment.user_profiles?.username,
-    avatarUrl: comment.user_profiles?.avatar_url
+    username: comment.user_name,
+    avatarUrl: comment.user_avatar
   };
 }

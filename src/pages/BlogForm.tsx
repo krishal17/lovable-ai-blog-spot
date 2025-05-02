@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { createBlogPost, updateBlogPost, getBlogPostById, BlogPost } from '@/lib/firestore';
@@ -263,7 +262,7 @@ const BlogForm: React.FC = () => {
 
       // Generate a unique file name to avoid conflicts during updates
       const fileExt = imageFile.name.split('.').pop();
-      const fileName = `${currentUser.uid}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
+      const fileName = `${currentUser.id}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
 
       // Upload the file
       const { data: uploadData, error: uploadError } = await supabase
