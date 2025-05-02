@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface BlogPost {
@@ -32,6 +31,32 @@ export interface UserProfile {
   createdAt: string;
   updatedAt: string;
 }
+
+// Get all users - This function was missing and causing the error
+export const getAllUsers = async (): Promise<UserProfile[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching users:', error);
+      throw new Error(error.message || 'Failed to fetch users');
+    }
+
+    return data.map(user => ({
+      id: user.id,
+      username: user.username,
+      avatarUrl: user.avatar_url,
+      createdAt: user.created_at,
+      updatedAt: user.updated_at
+    }));
+  } catch (error: any) {
+    console.error('Error in getAllUsers:', error);
+    throw new Error(error.message || 'Failed to fetch users');
+  }
+};
 
 // Create a new blog post
 export const createBlogPost = async (blogData: Omit<BlogPost, 'id' | 'createdAt' | 'updatedAt'>) => {
