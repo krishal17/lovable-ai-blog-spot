@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Toggle } from "@/components/ui/toggle";
+import { supabase } from '@/integrations/supabase/client';
 
 interface BlogFormData {
   title: string;
@@ -234,8 +235,32 @@ const BlogForm: React.FC = () => {
 
     try {
       setUploadingImage(true);
-      const imageUrl = await uploadImage(imageFile);
-      return imageUrl;
+      // Check if the 'blog-images' bucket exists, create it if not
+      const { data: buckets } = await supabase.storage.listBuckets();
+      
+      if (!buckets?.find(bucket => bucket.name === 'blog-images')) {
+        await supabase.storage.createBucket('blog-images', { 
+          public: true,
+          fileSizeLimit: 5242880 // 5MB
+        });
+      }
+      
+      // Generate a unique file name
+      const fileExt = imageFile.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+      
+      // Upload the file
+      const { error: uploadError } = await supabase.storage
+        .from('blog-images')
+        .upload(fileName, imageFile);
+      
+      if (uploadError) {
+        throw uploadError;
+      }
+      
+      // Get the public URL
+      const { data } = supabase.storage.from('blog-images').getPublicUrl(fileName);
+      return data.publicUrl;
     } catch (error) {
       console.error('Error uploading image:', error);
       throw error;
@@ -312,12 +337,22 @@ const BlogForm: React.FC = () => {
 
       let updatedPost;
       if (isEditMode && id) {
-        updatedPost = await updateBlogPost(id, blogData);
-        toast({
-          title: "Success!",
-          description: "Blog post updated successfully.",
-          className: "bg-gradient-to-r from-green-500 to-emerald-500 text-white",
-        });
+        try {
+          updatedPost = await updateBlogPost(id, blogData);
+          toast({
+            title: "Success!",
+            description: "Blog post updated successfully.",
+            className: "bg-gradient-to-r from-green-500 to-emerald-500 text-white",
+          });
+        } catch (error: any) {
+          console.error('Failed to update post:', error);
+          toast({
+            variant: "destructive",
+            title: "Update Failed",
+            description: error.message || "Failed to update blog post. Please try again."
+          });
+          return;
+        }
       } else {
         updatedPost = await createBlogPost(blogData);
         toast({
@@ -327,8 +362,13 @@ const BlogForm: React.FC = () => {
         });
       }
 
-      // Navigate to the updated/created post
-      navigate(`/blog/${updatedPost.id}`);
+      // Navigate to the blog post view or admin dashboard
+      if (updatedPost) {
+        navigate(`/blog/${updatedPost.id}`);
+      } else {
+        // Fallback if no post was returned
+        navigate('/admin');
+      }
     } catch (error: any) {
       console.error('Error submitting form:', error);
       toast({

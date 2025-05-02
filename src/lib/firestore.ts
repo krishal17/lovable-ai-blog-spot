@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 export interface BlogPost {
@@ -91,7 +92,7 @@ export const createBlogPost = async (blogData: Omit<BlogPost, 'id' | 'createdAt'
   }
 };
 
-// Update an existing blog post
+// Update an existing blog post - FIXED: Now handling empty response correctly
 export const updateBlogPost = async (id: string, data: Partial<BlogPost>): Promise<BlogPost> => {
   try {
     // Prepare update data
@@ -111,6 +112,23 @@ export const updateBlogPost = async (id: string, data: Partial<BlogPost>): Promi
     console.log('Updating blog post with ID:', id);
     console.log('Update data:', updateData);
 
+    // First verify the post exists
+    const { data: existingPost, error: checkError } = await supabase
+      .from('blog_posts')
+      .select('id')
+      .eq('id', id)
+      .single();
+    
+    if (checkError) {
+      console.error('Error checking blog post:', checkError);
+      throw new Error(checkError.message || 'Failed to find blog post');
+    }
+    
+    if (!existingPost) {
+      throw new Error('No blog post found with the given ID');
+    }
+
+    // Now update the post
     const { data: updatedData, error: updateError } = await supabase
       .from('blog_posts')
       .update(updateData)
@@ -124,7 +142,18 @@ export const updateBlogPost = async (id: string, data: Partial<BlogPost>): Promi
     }
 
     if (!updatedData) {
-      throw new Error('No blog post found with the given ID');
+      // This is a fallback - we'll re-fetch the post if the update didn't return data
+      const { data: refetchedPost, error: refetchError } = await supabase
+        .from('blog_posts')
+        .select('*')
+        .eq('id', id)
+        .single();
+        
+      if (refetchError || !refetchedPost) {
+        throw new Error('Failed to fetch updated blog post');
+      }
+      
+      return transformBlogPost(refetchedPost);
     }
 
     return transformBlogPost(updatedData);
