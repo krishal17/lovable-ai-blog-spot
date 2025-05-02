@@ -126,10 +126,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
         },
       });
 
@@ -151,7 +147,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         provider: 'github',
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
-          scopes: 'read:user user:email',
         },
       });
 

@@ -1,11 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Github } from 'lucide-react';
@@ -15,7 +14,6 @@ const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [oauthLoading, setOAuthLoading] = useState<string | null>(null);
   const [error, setError] = useState('');
   const { login, currentUser, loginWithGoogle, loginWithGithub } = useAuth();
   const navigate = useNavigate();
@@ -41,6 +39,7 @@ const Login: React.FC = () => {
       await login(email, password);
       navigate('/');
     } catch (err: any) {
+      console.error('Login error:', err);
       setError(err?.message || 'Failed to login. Please check your credentials.');
     } finally {
       setLoading(false);
@@ -48,24 +47,18 @@ const Login: React.FC = () => {
   };
 
   const handleGoogleLogin = async () => {
-    setLoading(true);
     try {
       await loginWithGoogle();
     } catch (error) {
       console.error('Google login error:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
   const handleGithubLogin = async () => {
-    setLoading(true);
     try {
       await loginWithGithub();
     } catch (error) {
       console.error('Github login error:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -81,6 +74,13 @@ const Login: React.FC = () => {
             Sign in to your account
           </h2>
         </div>
+
+        {error && (
+          <div className="bg-red-50 text-red-700 p-3 rounded-md text-sm">
+            {error}
+          </div>
+        )}
+        
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm space-y-4">
             <div>
@@ -111,7 +111,14 @@ const Login: React.FC = () => {
               className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
               disabled={loading}
             >
-              {loading ? 'Signing in...' : 'Sign in'}
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                'Sign in'
+              )}
             </Button>
           </div>
 
@@ -127,7 +134,6 @@ const Login: React.FC = () => {
               variant="outline"
               className="w-full flex items-center justify-center space-x-2"
               onClick={handleGoogleLogin}
-              disabled={loading}
             >
               <FcGoogle className="h-5 w-5" />
               <span>Continue with Google</span>
@@ -138,7 +144,6 @@ const Login: React.FC = () => {
               variant="outline"
               className="w-full flex items-center justify-center space-x-2"
               onClick={handleGithubLogin}
-              disabled={loading}
             >
               <Github className="h-5 w-5" />
               <span>Continue with GitHub</span>

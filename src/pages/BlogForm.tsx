@@ -1,7 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { createBlogPost, updateBlogPost, getBlogPostById, BlogPost } from '@/lib/firestore';
-import { uploadToCloudinary } from '@/lib/cloudinary';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -227,73 +227,58 @@ const BlogForm: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  // Upload image to Storage
+  // Upload image to Supabase Storage
   const handleImageUpload = async () => {
     if (!imageFile || !currentUser) return null;
 
     try {
       setUploadingImage(true);
 
-      // First check if bucket exists
-      const { data: buckets, error: bucketError } = await supabase
-        .storage
-        .listBuckets();
-
-      if (bucketError) {
-        console.error('Error checking buckets:', bucketError);
-        throw bucketError;
-      }
+      // Check if blog_images bucket exists
+      const { data: buckets } = await supabase.storage.listBuckets();
+      const bucketExists = buckets?.some(bucket => bucket.name === 'blog_images');
 
       // Create bucket if it doesn't exist
-      if (!buckets?.some(bucket => bucket.name === 'blog_images')) {
-        const { error: createError } = await supabase
-          .storage
-          .createBucket('blog_images', {
-            public: true,
-            fileSizeLimit: 5242880, // 5MB
-            allowedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
-          });
+      if (!bucketExists) {
+        const { error: createBucketError } = await supabase.storage.createBucket('blog_images', {
+          public: true,
+          fileSizeLimit: 5242880 // 5MB
+        });
 
-        if (createError) {
-          console.error('Error creating bucket:', createError);
-          throw createError;
+        if (createBucketError) {
+          console.error('Error creating bucket:', createBucketError);
+          throw createBucketError;
         }
       }
 
-      // Generate a unique file name to avoid conflicts during updates
+      // Generate a unique filename using timestamp and random string
+      const timestamp = new Date().getTime();
+      const randomString = Math.random().toString(36).substring(2, 10);
       const fileExt = imageFile.name.split('.').pop();
-      const fileName = `${currentUser.id}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
+      const filePath = `${currentUser.id}/${timestamp}_${randomString}.${fileExt}`;
 
       // Upload the file
-      const { data: uploadData, error: uploadError } = await supabase
-        .storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from('blog_images')
-        .upload(fileName, imageFile, {
+        .upload(filePath, imageFile, {
           cacheControl: '3600',
-          upsert: true // Allow overwriting files
+          upsert: true
         });
 
       if (uploadError) {
-        console.error('Supabase upload error:', uploadError);
+        console.error('Error uploading image:', uploadError);
         throw uploadError;
       }
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase
-        .storage
+      // Get the public URL
+      const { data } = supabase.storage
         .from('blog_images')
-        .getPublicUrl(fileName);
+        .getPublicUrl(filePath);
 
-      return publicUrl;
+      return data.publicUrl;
     } catch (error) {
       console.error('Error uploading image:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to upload image. Please try again.",
-        className: "bg-gradient-to-r from-red-500 to-rose-500 text-white",
-      });
-      return null;
+      throw error;
     } finally {
       setUploadingImage(false);
     }
@@ -337,11 +322,16 @@ const BlogForm: React.FC = () => {
       // Upload image if a new one is selected
       let finalImageUrl = formData.imageUrl;
       if (imageFile) {
-        finalImageUrl = await handleImageUpload() || '';
-        if (!finalImageUrl) {
+        try {
+          const imageUrl = await handleImageUpload();
+          if (imageUrl) {
+            finalImageUrl = imageUrl;
+          }
+        } catch (error) {
+          console.error('Image upload error:', error);
           toast({
             variant: "destructive",
-            title: "Error",
+            title: "Image Upload Failed",
             description: "Failed to upload image. Please try again."
           });
           return;
@@ -355,7 +345,6 @@ const BlogForm: React.FC = () => {
         imageUrl: finalImageUrl,
         category: formData.category,
         excerpt: formData.excerpt,
-        is_featured: false,
         content_format: formData.content_format
       };
 

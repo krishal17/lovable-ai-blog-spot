@@ -8,6 +8,17 @@ export const uploadToCloudinary = async (file: File): Promise<string> => {
     const fileName = `${Date.now()}.${fileExt}`;
     const filePath = `blog-images/${fileName}`;
     
+    // Check if bucket exists
+    const { data: buckets } = await supabase.storage.listBuckets();
+    
+    if (!buckets?.some(bucket => bucket.name === 'blog_images')) {
+      // Create bucket if it doesn't exist
+      await supabase.storage.createBucket('blog_images', {
+        public: true,
+        fileSizeLimit: 5242880 // 5MB
+      });
+    }
+    
     // Upload file to Supabase Storage
     const { error: uploadError } = await supabase
       .storage
