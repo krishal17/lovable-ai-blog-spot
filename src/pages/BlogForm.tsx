@@ -1,7 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { createBlogPost, updateBlogPost, getBlogPostById, BlogPost } from '@/lib/firestore';
+import { createBlogPost, updateBlogPost, getBlogPostById } from '@/lib/firestore';
+import { uploadImage } from '@/lib/storage';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -28,7 +28,6 @@ import {
   Loader2 
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 import { Toggle } from "@/components/ui/toggle";
 
 interface BlogFormData {
@@ -102,6 +101,8 @@ const BlogForm: React.FC = () => {
       try {
         setLoading(true);
         const blogData = await getBlogPostById(id);
+        console.log("Retrieved blog data:", blogData);
+        
         if (blogData) {
           setFormData({
             title: blogData.title,
@@ -229,53 +230,12 @@ const BlogForm: React.FC = () => {
 
   // Upload image to Supabase Storage
   const handleImageUpload = async () => {
-    if (!imageFile || !currentUser) return null;
+    if (!imageFile) return null;
 
     try {
       setUploadingImage(true);
-
-      // Check if blog_images bucket exists
-      const { data: buckets } = await supabase.storage.listBuckets();
-      const bucketExists = buckets?.some(bucket => bucket.name === 'blog_images');
-
-      // Create bucket if it doesn't exist
-      if (!bucketExists) {
-        const { error: createBucketError } = await supabase.storage.createBucket('blog_images', {
-          public: true,
-          fileSizeLimit: 5242880 // 5MB
-        });
-
-        if (createBucketError) {
-          console.error('Error creating bucket:', createBucketError);
-          throw createBucketError;
-        }
-      }
-
-      // Generate a unique filename using timestamp and random string
-      const timestamp = new Date().getTime();
-      const randomString = Math.random().toString(36).substring(2, 10);
-      const fileExt = imageFile.name.split('.').pop();
-      const filePath = `${currentUser.id}/${timestamp}_${randomString}.${fileExt}`;
-
-      // Upload the file
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('blog_images')
-        .upload(filePath, imageFile, {
-          cacheControl: '3600',
-          upsert: true
-        });
-
-      if (uploadError) {
-        console.error('Error uploading image:', uploadError);
-        throw uploadError;
-      }
-
-      // Get the public URL
-      const { data } = supabase.storage
-        .from('blog_images')
-        .getPublicUrl(filePath);
-
-      return data.publicUrl;
+      const imageUrl = await uploadImage(imageFile);
+      return imageUrl;
     } catch (error) {
       console.error('Error uploading image:', error);
       throw error;
@@ -347,6 +307,8 @@ const BlogForm: React.FC = () => {
         excerpt: formData.excerpt,
         content_format: formData.content_format
       };
+
+      console.log('Submitting blog data:', blogData);
 
       let updatedPost;
       if (isEditMode && id) {

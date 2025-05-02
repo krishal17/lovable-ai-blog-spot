@@ -6,7 +6,9 @@ import './index.css';
 import { setupStorage } from './lib/setupStorage';
 
 // Set up storage bucket if needed
-setupStorage().catch(console.error);
+setupStorage().catch((error) => {
+  console.error('Error setting up storage:', error);
+});
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>

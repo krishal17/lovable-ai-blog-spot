@@ -30,6 +30,7 @@ const AdminDashboard: React.FC = () => {
     try {
       setLoading(true);
       const blogPosts = await getAllBlogPosts();
+      console.log('Fetched blogs:', blogPosts);
       setBlogs(blogPosts);
     } catch (error) {
       console.error('Error fetching blogs:', error);
@@ -61,16 +62,13 @@ const AdminDashboard: React.FC = () => {
     try {
       await deleteBlogPost(blogToDelete);
       
-      // Remove from local state to update UI immediately
-      setBlogs(prevBlogs => prevBlogs.filter(blog => blog.id !== blogToDelete));
-      
       toast({
         title: "Blog deleted",
         description: "The blog post has been deleted successfully.",
         className: "bg-gradient-to-r from-green-500 to-emerald-500 text-white",
       });
       
-      // Refresh the list after deletion to ensure sync with server
+      // Refresh the list after deletion
       fetchBlogs();
     } catch (error) {
       console.error('Error deleting blog:', error);

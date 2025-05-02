@@ -1,18 +1,19 @@
 
-// This file is now deprecated and replaced by storage.ts
-// All upload functionality has been moved to Supabase Storage
-// This file is kept only for reference and should be removed in future updates
-
 import { supabase } from '@/integrations/supabase/client';
 
-export const uploadToCloudinary = async (file: File): Promise<string> => {
-  console.warn('uploadToCloudinary is deprecated, please use uploadImage from src/lib/storage.ts instead');
-  
+/**
+ * Uploads an image to Supabase Storage
+ * @param file The file to upload
+ * @returns The public URL of the uploaded file
+ */
+export const uploadImage = async (file: File): Promise<string> => {
   try {
     // Generate a unique file name
+    const timestamp = new Date().getTime();
+    const randomString = Math.random().toString(36).substring(2, 10);
     const fileExt = file.name.split('.').pop();
-    const fileName = `${Date.now()}.${fileExt}`;
-    const filePath = `blog-images/${fileName}`;
+    const fileName = `${timestamp}_${randomString}.${fileExt}`;
+    const filePath = `blog_images/${fileName}`;
     
     // Check if bucket exists
     const { data: buckets } = await supabase.storage.listBuckets();

@@ -1,6 +1,5 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { Database } from "@/integrations/supabase/types";
 
 export interface BlogPost {
   id: string;
@@ -13,6 +12,7 @@ export interface BlogPost {
   content_format?: any;
   excerpt?: string;
   is_featured?: boolean;
+  comments?: Comment[];
 }
 
 export interface Comment {
@@ -71,16 +71,18 @@ export const updateBlogPost = async (id: string, data: Partial<BlogPost>): Promi
   try {
     // Prepare update data
     const updateData: any = {
-      ...data,
       updated_at: new Date().toISOString()
     };
+    
+    // Map fields from the data object to database columns
+    if (data.title) updateData.title = data.title;
+    if (data.description) updateData.description = data.description;
+    if (data.imageUrl) updateData.image_url = data.imageUrl;
+    if (data.category) updateData.category = data.category;
+    if (data.content_format) updateData.content_format = data.content_format;
+    if (data.excerpt) updateData.excerpt = data.excerpt;
+    if (data.is_featured !== undefined) updateData.is_featured = data.is_featured;
 
-    // If imageUrl is provided, update it
-    if (data.imageUrl) {
-      updateData.image_url = data.imageUrl;
-    }
-
-    // Log what we're updating
     console.log('Updating blog post with ID:', id);
     console.log('Update data:', updateData);
 
@@ -191,6 +193,27 @@ export const getAllBlogPosts = async (): Promise<BlogPost[]> => {
   }
 };
 
+// Get blog posts by category
+export const getBlogPostsByCategory = async (category: string): Promise<BlogPost[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('blog_posts')
+      .select('*')
+      .eq('category', category)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching blog posts by category:', error);
+      throw new Error(error.message || 'Failed to fetch blog posts by category');
+    }
+
+    return data.map(transformBlogPost);
+  } catch (error: any) {
+    console.error('Error in getBlogPostsByCategory:', error);
+    throw new Error(error.message || 'Failed to fetch blog posts by category');
+  }
+};
+
 // Get all unique categories
 export const getAllCategories = async (): Promise<string[]> => {
   const { data, error } = await supabase
@@ -247,15 +270,7 @@ export const getCommentsByBlogId = async (blogId: string): Promise<Comment[]> =>
 
   if (error) throw error;
 
-  return data.map(comment => ({
-    id: comment.id,
-    blogId: comment.post_id,
-    userId: comment.user_id,
-    content: comment.content,
-    createdAt: comment.created_at,
-    username: comment.user_name,
-    avatarUrl: comment.user_avatar
-  }));
+  return data.map(comment => transformComment(comment));
 };
 
 export const deleteComment = async (commentId: string) => {
@@ -388,24 +403,6 @@ export const updateUserProfile = async (userId: string, profile: Partial<UserPro
     createdAt: data.created_at,
     updatedAt: data.updated_at
   };
-};
-
-// Admin functions
-export const getAllUsers = async (): Promise<UserProfile[]> => {
-  const { data, error } = await supabase
-    .from('user_profiles')
-    .select('*')
-    .order('created_at', { ascending: false });
-
-  if (error) throw error;
-
-  return data.map(user => ({
-    id: user.id,
-    username: user.username,
-    avatarUrl: user.avatar_url,
-    createdAt: user.created_at,
-    updatedAt: user.updated_at
-  }));
 };
 
 // Helper function to transform database column names to camelCase for frontend consistency
